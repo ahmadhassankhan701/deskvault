@@ -1,3 +1,5 @@
+"use client";
+
 import { format } from "date-fns";
 import { transactions, products } from "@/lib/data";
 import {
