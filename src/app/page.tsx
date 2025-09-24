@@ -1,10 +1,10 @@
-import { ArrowLeftRight, LayoutDashboard, Package, DollarSign } from 'lucide-react';
+import { Users, LayoutDashboard, Package, DollarSign } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeskVaultIcon } from '@/components/icons';
 import { ReportsTab } from '@/components/reports-tab';
 import { InventoryTab } from '@/components/inventory-tab';
-import { TransactionsTab } from '@/components/transactions-tab';
-import { ExpensesTab } from '@/components/expenses-tab';
+import { PartnersTab } from '@/components/partners-tab';
+import { AccountTab } from '@/components/account-tab';
 
 export default function Home() {
   return (
@@ -28,13 +28,13 @@ export default function Home() {
               <Package className="mr-2 h-4 w-4" />
               Inventory
             </TabsTrigger>
-            <TabsTrigger value="transactions" className="py-2">
-              <ArrowLeftRight className="mr-2 h-4 w-4" />
-              Transactions
+            <TabsTrigger value="partners" className="py-2">
+              <Users className="mr-2 h-4 w-4" />
+              Partners
             </TabsTrigger>
-            <TabsTrigger value="expenses" className="py-2">
+            <TabsTrigger value="account" className="py-2">
               <DollarSign className="mr-2 h-4 w-4" />
-              Expenses
+              Account
             </TabsTrigger>
           </TabsList>
           <TabsContent value="dashboard" className="mt-4">
@@ -43,11 +43,11 @@ export default function Home() {
           <TabsContent value="inventory" className="mt-4">
             <InventoryTab />
           </TabsContent>
-          <TabsContent value="transactions" className="mt-4">
-            <TransactionsTab />
+          <TabsContent value="partners" className="mt-4">
+            <PartnersTab />
           </TabsContent>
-          <TabsContent value="expenses" className="mt-4">
-            <ExpensesTab />
+          <TabsContent value="account" className="mt-4">
+            <AccountTab />
           </TabsContent>
         </Tabs>
       </main>

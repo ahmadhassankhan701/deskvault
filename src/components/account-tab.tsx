@@ -73,7 +73,7 @@ const expenseSchema = z.object({
   date: z.date(),
 });
 
-export function ExpensesTab() {
+export function AccountTab() {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -108,7 +108,7 @@ export function ExpensesTab() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Expenses</CardTitle>
+            <CardTitle>Account</CardTitle>
             <CardDescription>Track your operational expenses.</CardDescription>
           </div>
           <Button onClick={() => setIsDialogOpen(true)} size="sm">

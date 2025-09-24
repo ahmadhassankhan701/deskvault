@@ -16,7 +16,7 @@ export type Transaction = {
   price: number; // price per unit
   totalAmount: number;
   date: string;
-  party: string; // Customer or Supplier
+  party: string; // Customer, Supplier, or other Partner
 };
 
 export type Expense = {

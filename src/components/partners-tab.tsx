@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { TransactionType } from "@/lib/types";
 
-export function TransactionsTab() {
+export function PartnersTab() {
   const getProductById = (id: string) => products.find((p) => p.id === id);
 
   const getTransactionTypeBadge = (type: TransactionType) => {
@@ -41,9 +41,9 @@ export function TransactionsTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Transactions</CardTitle>
+        <CardTitle>Partners</CardTitle>
         <CardDescription>
-          A log of all inventory movements.
+          A log of all inventory movements with partners.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -53,7 +53,7 @@ export function TransactionsTab() {
               <TableHead>Date</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Product</TableHead>
-              <TableHead>Party</TableHead>
+              <TableHead>Partner</TableHead>
               <TableHead>Qty</TableHead>
               <TableHead className="text-right">Total Amount</TableHead>
             </TableRow>
