@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, startOfToday } from "date-fns";
-import { Calendar as CalendarIcon, PlusCircle } from "lucide-react";
+import { Calendar as CalendarIcon, PlusCircle, MoreHorizontal } from "lucide-react";
 
 import { transactions as initialTransactions, products } from "@/lib/data";
 import type { Transaction, TransactionType } from "@/lib/types";
@@ -37,6 +37,12 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Form,
   FormControl,
@@ -136,37 +142,38 @@ export function PartnersTab() {
       case "lend-out":
         return <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Lend (Out)</Badge>;
       default:
-        return <Badge variant="outline">{type}</Badge>;
+        return <Badge variant="outline">{type.replace('-', ' ')}</Badge>;
     }
   };
 
   return (
     <>
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Partners</CardTitle>
-              <CardDescription>
-                A log of all inventory movements with partners.
-              </CardDescription>
-            </div>
-            <Button onClick={() => setIsDialogOpen(true)} size="sm">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Transaction
-            </Button>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>Partner Transactions</CardTitle>
+            <CardDescription>
+              A log of all inventory movements with your partners.
+            </CardDescription>
           </div>
+          <Button onClick={() => setIsDialogOpen(true)} size="sm">
+            <PlusCircle className="mr-2" />
+            Add Transaction
+          </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
                 <TableHead>Product</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Partner</TableHead>
-                <TableHead>Qty</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="text-right">Total Amount</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -174,17 +181,26 @@ export function PartnersTab() {
                 const product = getProductById(transaction.productId);
                 return (
                   <TableRow key={transaction.id}>
-                    <TableCell>
-                      {format(new Date(transaction.date), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      {getTransactionTypeBadge(transaction.type)}
-                    </TableCell>
-                    <TableCell className="font-medium">{product?.name}</TableCell>
+                    <TableCell className="font-medium">{product?.name ?? 'N/A'}</TableCell>
+                    <TableCell>{getTransactionTypeBadge(transaction.type)}</TableCell>
                     <TableCell>{transaction.party}</TableCell>
-                    <TableCell>{transaction.quantity}</TableCell>
+                    <TableCell>{format(new Date(transaction.date), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-right">{transaction.quantity}</TableCell>
                     <TableCell className="text-right">
                       ${transaction.totalAmount.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                       <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>Edit</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -193,16 +209,17 @@ export function PartnersTab() {
           </Table>
         </CardContent>
       </Card>
+      
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Transaction</DialogTitle>
+            <DialogTitle>Log New Transaction</DialogTitle>
             <DialogDescription>
-              Log a new transaction with a partner.
+              Enter the details to log a new transaction with a partner.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4">
               <FormField
                 control={form.control}
                 name="productId"
@@ -235,7 +252,7 @@ export function PartnersTab() {
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a transaction type" />
-                        </Trigger>
+                        </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="sale">Sale</SelectItem>
@@ -318,9 +335,9 @@ export function PartnersTab() {
                   )}
                 />
 
-              <DialogFooter>
+              <DialogFooter className="pt-4">
                 <DialogClose asChild>
-                  <Button type="button" variant="secondary">
+                  <Button type="button" variant="outline">
                     Cancel
                   </Button>
                 </DialogClose>
