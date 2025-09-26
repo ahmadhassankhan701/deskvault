@@ -7,7 +7,7 @@ import { z } from "zod";
 import { PlusCircle, Package, Search, User, Building, Phone, MoreHorizontal } from "lucide-react";
 import { format } from 'date-fns';
 
-import { products as initialProducts, transactions as initialTransactions, partners as initialPartners } from "@/lib/data";
+import { useData } from "@/context/data-context";
 import type { Product, Transaction, Partner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -104,9 +104,7 @@ type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner 
 type EnrichedTransaction = Transaction & { product: Product, partner?: Partner };
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [partners, setPartners] = useState<Partner[]>(initialPartners);
+  const { products, setProducts, transactions, setTransactions, partners, addPartner, addProduct, addTransaction } = useData();
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [isSaleDialogOpen, setIsSaleDialogOpen] = useState(false);
@@ -232,7 +230,7 @@ export default function InventoryPage() {
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null);
+            .filter((t): t is EnrichedTransaction => t !== null && !!t.product);
 
         if (searchTerm) {
             return soldTransactions.filter(t =>
@@ -320,9 +318,9 @@ export default function InventoryPage() {
         setTransactions(prev => prev.filter(t => t.id !== existingLentTransaction.id));
     }
 
-    if (!isNewProduct) {
+    if (!isNewProduct && editingProduct) {
       const updatedProducts = products.map(p =>
-        p.id === editingProduct.id ? { ...p, ...values, imei: values.imei, stock: values.type === 'individual' ? 1 : values.stock } : p
+        p.id === editingProduct.id ? { ...p, ...values, id: productId, imei: values.imei, stock: values.type === 'individual' ? 1 : values.stock } : p
       );
       setProducts(updatedProducts);
       toast({
@@ -330,12 +328,11 @@ export default function InventoryPage() {
         description: `${values.name} has been updated.`,
       });
     } else {
-      const newProduct: Product = {
-        id: productId,
+       const newProduct = addProduct({
         ...values,
         stock: values.type === 'individual' ? 1 : values.stock,
-      };
-      setProducts([newProduct, ...products]);
+      });
+      productId = newProduct.id;
       toast({
         title: "Product Added",
         description: `${values.name} has been added to the inventory.`,
@@ -343,8 +340,7 @@ export default function InventoryPage() {
     }
     
     if (values.lentTo && (!existingLentTransaction || existingLentTransaction.party !== values.lentTo)) {
-         const newTransaction: Transaction = {
-            id: `txn-${Date.now()}`,
+        addTransaction({
             productId: productId,
             type: 'lend-out',
             quantity: 1,
@@ -352,8 +348,7 @@ export default function InventoryPage() {
             totalAmount: 0,
             date: new Date().toISOString(),
             party: values.lentTo
-        };
-        setTransactions(prev => [newTransaction, ...prev]);
+        });
         toast({ title: "Product Lent", description: `Logged lend-out for ${values.name} to ${values.lentTo}.` });
     }
 
@@ -366,20 +361,16 @@ export default function InventoryPage() {
 
     let partner = partners.find(p => p.name === values.buyerName && p.phone === values.buyerPhone);
     if (!partner) {
-        const newPartner: Partner = {
-            id: `partner-${Date.now()}`,
+        partner = addPartner({
             name: values.buyerName,
             phone: values.buyerPhone,
             type: 'individual',
-        };
-        setPartners(prev => [newPartner, ...prev]);
-        partner = newPartner;
+        });
     }
     
     const quantitySold = sellingProduct.type === 'individual' ? 1 : values.quantity;
 
-    const saleTransaction: Transaction = {
-        id: `txn-${Date.now()}`,
+    addTransaction({
         productId: sellingProduct.id,
         type: 'sale',
         quantity: quantitySold,
@@ -387,9 +378,7 @@ export default function InventoryPage() {
         totalAmount: values.sellingPrice * quantitySold,
         date: new Date().toISOString(),
         party: partner.name,
-    };
-
-    setTransactions(prev => [saleTransaction, ...prev]);
+    });
 
     setProducts(prev => prev.map(p => 
         p.id === sellingProduct.id 
@@ -511,7 +500,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleSell(product)}>Sell</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSell(product)} disabled={product.stock === 0}>Sell</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleEdit(product)}>Edit</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDelete(product)} className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>

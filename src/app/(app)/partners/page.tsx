@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PlusCircle, MoreHorizontal, User, Building } from "lucide-react";
 
-import { partners as initialPartners } from "@/lib/data";
+import { useData } from "@/context/data-context";
 import type { Partner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,7 +79,7 @@ const partnerSchema = z.object({
 
 
 export default function PartnersPage() {
-  const [partners, setPartners] = useState<Partner[]>(initialPartners);
+  const { partners, setPartners, addPartner } = useData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
@@ -154,12 +154,10 @@ export default function PartnersPage() {
         description: `${values.name} has been updated.`,
       });
     } else {
-      const newPartner: Partner = {
-        id: `partner-${Date.now()}`,
+      addPartner({
         ...values,
         shopName: values.type === 'shop' ? values.shopName : undefined,
-      };
-      setPartners([newPartner, ...partners]);
+      });
       toast({
         title: "Partner Added",
         description: `${values.name} has been added to your partners list.`,

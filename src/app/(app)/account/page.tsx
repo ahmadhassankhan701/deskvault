@@ -7,7 +7,7 @@ import { z } from "zod";
 import { format, startOfToday } from "date-fns";
 import { Calendar as CalendarIcon, PlusCircle } from "lucide-react";
 
-import { expenses as initialExpenses } from "@/lib/data";
+import { useData } from "@/context/data-context";
 import type { Expense } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,7 @@ const expenseSchema = z.object({
 });
 
 export default function AccountPage() {
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
+  const { expenses, addExpense } = useData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -89,12 +89,10 @@ export default function AccountPage() {
   });
 
   function onSubmit(values: z.infer<typeof expenseSchema>) {
-    const newExpense: Expense = {
-      id: `exp-${Date.now()}`,
+    addExpense({
       ...values,
       date: values.date.toISOString(),
-    };
-    setExpenses([newExpense, ...expenses]);
+    });
     toast({
       title: "Expense Added",
       description: `Successfully logged ${values.description}.`,
@@ -143,6 +141,7 @@ export default function AccountPage() {
             </TableBody>
             </Table>
         </CardContent>
+        </Card>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
@@ -261,7 +260,6 @@ export default function AccountPage() {
             </Form>
             </DialogContent>
         </Dialog>
-        </Card>
     </div>
   );
 }

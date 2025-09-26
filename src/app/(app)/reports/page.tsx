@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,8 +15,8 @@ import {
   ChartTooltipContent,
   ChartConfig,
 } from "@/components/ui/chart";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { transactions, expenses } from "@/lib/data";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useData } from "@/context/data-context";
 import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { startOfWeek, startOfMonth, parseISO, format } from "date-fns";
 
@@ -25,6 +24,7 @@ type Timeframe = "weekly" | "monthly" | "all";
 
 export default function ReportsPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>("monthly");
+  const { transactions, expenses } = useData();
 
   const chartData = useMemo(() => {
     const now = new Date();
@@ -89,7 +89,7 @@ export default function ReportsPage() {
       monthlyChartData,
       expenseChartData,
     };
-  }, [timeframe]);
+  }, [timeframe, transactions, expenses]);
 
   const barChartConfig = {
     sales: { label: "Sales", color: "hsl(var(--chart-1))" },
@@ -184,5 +184,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    
