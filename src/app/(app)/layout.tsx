@@ -40,7 +40,7 @@ export default function AppLayout({
               </div>
             </SidebarHeader>
             <SidebarContent>
-              <SidebarMenu className="mt-20 px-4">
+              <SidebarMenu className="mt-20 px-4 space-y-2">
                 <SidebarMenuItem>
                   <NavLink href="/reports">
                     <LayoutDashboard />
