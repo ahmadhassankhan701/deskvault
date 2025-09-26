@@ -225,12 +225,14 @@ export function InventoryTab() {
 
     if (activeTab === 'sold') {
         const soldItems = transactions
-            .filter(t => t.type === 'sale' && productMap.has(t.productId)) // Ensure product exists
+            .filter(t => t.type === 'sale')
             .map(t => {
-                const product = productMap.get(t.productId)!; // We know it exists from the filter
+                const product = productMap.get(t.productId);
+                if (!product) return null; // If product not found, return null
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
-            });
+            })
+            .filter((t): t is EnrichedTransaction => t !== null); // Filter out nulls
 
         if (searchTerm) {
             return soldItems.filter(t =>
