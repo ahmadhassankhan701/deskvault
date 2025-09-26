@@ -78,7 +78,7 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required."),
   price: z.coerce.number().min(0, "Price cannot be negative."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
-  imei: z.string().min(1, "IMEI is required."),
+  imei: z.string().optional(),
   borrowedFrom: z.string().optional(),
   lentTo: z.string().optional(),
 }).refine(data => {
@@ -211,7 +211,7 @@ export function InventoryTab() {
     }
 
     return enriched.filter(product =>
-      product.imei.toLowerCase().includes(searchTerm.toLowerCase())
+      product.imei?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [activeTab, searchTerm, products, transactions]);
   
@@ -701,7 +701,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                 />
               </div>
               
-              {productType === 'individual' && !editingProduct && (
+              {productType === 'individual' && (
                 <div className="grid grid-cols-2 gap-4">
                     <FormField
                         control={form.control}
