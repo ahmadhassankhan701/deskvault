@@ -209,6 +209,29 @@ export function InventoryTab() {
     );
 };
 
+const SoldToCell = ({ partner }: { partner?: Partner }) => {
+    if (!partner) return <TableCell>N/A</TableCell>;
+
+    const initials = partner.name.split(' ').map(n => n[0]).join('');
+
+    return (
+        <TableCell>
+            <div className="flex items-center gap-3">
+                <Avatar>
+                    <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col">
+                    <span className="font-medium">{partner.name}</span>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-3 w-3"/>
+                        <span>{partner.phone}</span>
+                    </div>
+                </div>
+            </div>
+        </TableCell>
+    );
+};
+
 
   const renderActiveTable = () => (
     <Table>
@@ -261,7 +284,7 @@ export function InventoryTab() {
         {filteredProducts.map(({id, name, transaction, partner, imei}) => (
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
-            <PartnerCell partner={partner} />
+            <SoldToCell partner={partner} />
             <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
             <TableCell className="text-right">
@@ -545,5 +568,3 @@ export function InventoryTab() {
     </>
   );
 }
-
-    
