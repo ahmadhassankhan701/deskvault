@@ -128,6 +128,8 @@ export function InventoryTab() {
 
   useEffect(() => {
     if (editingProduct) {
+      const activeTransaction = transactions.find(t => t.productId === editingProduct.id && (t.type === 'borrow-in' || t.type === 'lend-out'));
+      
       form.reset({
         type: editingProduct.type,
         name: editingProduct.name,
@@ -135,8 +137,8 @@ export function InventoryTab() {
         price: editingProduct.price,
         stock: editingProduct.stock,
         imei: editingProduct.imei,
-        borrowedFrom: "",
-        lentTo: "",
+        borrowedFrom: activeTransaction?.type === 'borrow-in' ? activeTransaction.party : "",
+        lentTo: activeTransaction?.type === 'lend-out' ? activeTransaction.party : "",
       });
     } else {
       form.reset({
@@ -150,7 +152,7 @@ export function InventoryTab() {
         lentTo: "",
       });
     }
-  }, [editingProduct, form]);
+  }, [editingProduct, form, transactions]);
   
   useEffect(() => {
     if (productType === "individual") {
@@ -432,7 +434,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
             <SoldToCell partner={partner} />
-            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
+            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
             <TableCell className="text-right">
               ${transaction?.totalAmount.toFixed(2) ?? '0.00'}
@@ -458,7 +460,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
             <PartnerCell partner={partner} />
-            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
+            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
           </TableRow>
         ))}
@@ -709,7 +711,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Borrowed from</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="None" />
@@ -729,7 +731,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Lent to</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="None" />
