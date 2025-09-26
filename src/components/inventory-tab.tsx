@@ -228,11 +228,11 @@ export function InventoryTab() {
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
-                if (!product) return null; // If product is deleted, return null
+                if (!product) return null;
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null); // Filter out the nulls
+            .filter((t): t is EnrichedTransaction => t !== null);
 
         if (searchTerm) {
             soldTransactions = soldTransactions.filter(t =>
@@ -247,10 +247,12 @@ export function InventoryTab() {
         let lentProducts: EnrichedProduct[] = transactions
             .filter(t => t.type === 'lend-out')
             .map(t => {
-                const product = productMap.get(t.productId)!;
+                const product = productMap.get(t.productId);
+                if (!product) return null;
                 const partner = partnerMap.get(t.party);
                 return { ...product, transaction: t, partner };
-            }).filter(p => p && productMap.has(p.id));
+            })
+            .filter((p): p is EnrichedProduct => p !== null && productMap.has(p.id));
         
         if (searchTerm) {
             lentProducts = lentProducts.filter(p =>
