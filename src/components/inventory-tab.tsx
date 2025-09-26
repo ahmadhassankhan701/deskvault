@@ -146,12 +146,12 @@ export function InventoryTab() {
   }, [editingProduct, form, transactions]);
   
   useEffect(() => {
-    if (productType === "individual") {
+    if (productType === "individual" && !editingProduct) {
       form.setValue("stock", 1);
-    } else {
-      if (form.getValues("stock") === 1 && !editingProduct) {
-          form.setValue("stock", 0);
-      }
+    } else if (productType === "sku" && !editingProduct) {
+        if (form.getValues("stock") === 1) {
+            form.setValue("stock", 0);
+        }
     }
   }, [productType, form, editingProduct]);
 
@@ -587,6 +587,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         onValueChange={field.onChange}
                         value={field.value}
                         className="flex items-center space-x-4"
+                        disabled={!!editingProduct}
                       >
                         <FormItem className="flex items-center space-x-2 space-y-0">
                           <FormControl>
