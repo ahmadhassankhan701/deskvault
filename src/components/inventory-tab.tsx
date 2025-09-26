@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package, ScanBarcode, Hash } from "lucide-react";
+import { PlusCircle, Package, Barcode, Hash } from "lucide-react";
 
 import { products as initialProducts } from "@/lib/data";
 import type { Product } from "@/lib/types";
@@ -294,10 +294,10 @@ export function InventoryTab() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center">
-                      <ScanBarcode className="mr-2 h-4 w-4" /> Barcode
+                      <Barcode className="mr-2 h-4 w-4" /> Barcode
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder={productType === 'individual' ? "IMEI will be used as barcode" : "Enter or scan barcode"} {...field} disabled={productType === 'individual'} />
+                      <Input placeholder={productType === 'individual' ? "IMEI will be used as barcode" : "Enter barcode"} {...field} disabled={productType === 'individual'} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
