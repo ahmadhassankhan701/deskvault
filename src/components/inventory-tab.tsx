@@ -224,23 +224,21 @@ export function InventoryTab() {
     }
 
     if (activeTab === 'sold') {
-        let soldTransactions = transactions
-            .filter(t => t.type === 'sale')
+        const soldItems = transactions
+            .filter(t => t.type === 'sale' && productMap.has(t.productId)) // Ensure product exists
             .map(t => {
-                const product = productMap.get(t.productId);
-                if (!product) return null;
+                const product = productMap.get(t.productId)!; // We know it exists from the filter
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
-            })
-            .filter((t): t is EnrichedTransaction => t !== null);
+            });
 
         if (searchTerm) {
-            soldTransactions = soldTransactions.filter(t =>
+            return soldItems.filter(t =>
                 t.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (t.product.imei && t.product.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
-        return soldTransactions;
+        return soldItems;
     }
     
     if (activeTab === 'lent') {
