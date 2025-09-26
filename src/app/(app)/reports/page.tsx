@@ -76,7 +76,7 @@ export default function ReportsPage() {
     rent: { label: "Rent", color: "hsl(var(--chart-1))" },
     salaries: { label: "Salaries", color: "hsl(var(--chart-2))" },
     utilities: { label: "Utilities", color: "hsl(var(--chart-3))" },
-    marketing: { label: "Marketing", color: "hsl(var(--chart-4))" },
+    stock: { label: "Stock", color: "hsl(var(--chart-4))" },
     other: { label: "Other", color: "hsl(var(--chart-5))" },
   } satisfies ChartConfig;
 

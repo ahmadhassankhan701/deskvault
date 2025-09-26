@@ -136,8 +136,8 @@ export const expenses: Expense[] = [
     {
         id: "exp-3",
         date: subDays(new Date(), 5).toISOString(),
-        category: "marketing",
-        description: "Social Media Campaign",
+        category: "stock",
+        description: "New inventory purchase",
         amount: 800.00
     },
     {

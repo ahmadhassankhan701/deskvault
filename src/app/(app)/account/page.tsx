@@ -65,7 +65,7 @@ const expenseSchema = z.object({
     "rent",
     "salaries",
     "utilities",
-    "marketing",
+    "stock",
     "other",
   ]),
   description: z.string().min(1, "Description is required."),
@@ -173,7 +173,7 @@ export default function AccountPage() {
                             <SelectItem value="rent">Rent</SelectItem>
                             <SelectItem value="salaries">Salaries</SelectItem>
                             <SelectItem value="utilities">Utilities</SelectItem>
-                            <SelectItem value="marketing">Marketing</SelectItem>
+                            <SelectItem value="stock">Stock</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                         </Select>

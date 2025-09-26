@@ -32,7 +32,7 @@ export type Transaction = {
 export type Expense = {
   id: string;
   date: string;
-  category: "rent" | "salaries" | "utilities" | "marketing" | "other";
+  category: "rent" | "salaries" | "utilities" | "stock" | "other";
   description: string;
   amount: number;
 };
