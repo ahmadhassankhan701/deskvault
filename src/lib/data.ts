@@ -1,5 +1,5 @@
 import { subDays, subMonths } from "date-fns";
-import type { Product, Transaction, Expense } from "./types";
+import type { Product, Transaction, Expense, Partner } from "./types";
 
 export const products: Product[] = [
   { id: "prod-1", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals" },
@@ -8,6 +8,14 @@ export const products: Product[] = [
   { id: "prod-4", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture" },
   { id: "prod-5", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio" },
   { id: "prod-6", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories" },
+];
+
+export const partners: Partner[] = [
+    { id: "partner-1", type: "shop", name: "Innovate LLC", phone: "555-0101", shopName: "Innovate LLC" },
+    { id: "partner-2", type: "shop", name: "Office Solutions Inc.", phone: "555-0102", shopName: "Office Solutions Inc." },
+    { id: "partner-3", type: "shop", name: "Design Co.", phone: "555-0103", shopName: "Design Co." },
+    { id: "partner-4", type: "individual", name: "Freelancer Bob", phone: "555-0104" },
+    { id: "partner-5", type: "shop", name: "Tech Distributors", phone: "555-0105", shopName: "Tech Distributors" },
 ];
 
 export const transactions: Transaction[] = [

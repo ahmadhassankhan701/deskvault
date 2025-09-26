@@ -8,6 +8,14 @@ export type Product = {
   category: string;
 };
 
+export type Partner = {
+  id: string;
+  type: 'individual' | 'shop';
+  name: string;
+  phone: string;
+  shopName?: string;
+};
+
 export type Transaction = {
   id: string;
   productId: string;
