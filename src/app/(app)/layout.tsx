@@ -1,4 +1,8 @@
 
+"use client";
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Users,
   LayoutDashboard,
@@ -21,16 +25,31 @@ import {
 import { NavLink } from '@/components/nav-link';
 import { DataProvider } from '@/context/data-context';
 import { Separator } from '@/components/ui/separator';
-import withAuth from '@/components/with-auth';
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { Skeleton } from '@/components/ui/skeleton';
 
+function AppLayoutContent({ children }: { children: React.ReactNode }) {
+  const { logout, isAuthenticated } = useAuth();
+  const router = useRouter();
 
-function AppLayoutContent({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { logout } = useAuth();
+  useEffect(() => {
+    if (isAuthenticated === false) { // Explicitly check for false to avoid redirect on initial load
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
+
+  if (isAuthenticated === null || isAuthenticated === false) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="space-y-4 text-center">
+            <Skeleton className="mx-auto h-12 w-12 rounded-full" />
+            <Skeleton className="h-4 w-[250px]" />
+            <p className="text-sm text-muted-foreground">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <DataProvider>
       <SidebarProvider>
@@ -121,11 +140,10 @@ function AppLayoutContent({
   );
 }
 
-
-const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <AuthProvider>
-    <AppLayoutContent>{children}</AppLayoutContent>
-  </AuthProvider>
-);
-
-export default withAuth(AppLayout);
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <AppLayoutContent>{children}</AppLayoutContent>
+    </AuthProvider>
+  );
+}

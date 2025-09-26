@@ -5,27 +5,20 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
-  isAuthenticated: boolean;
+  isAuthenticated: boolean | null;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// A simple mock for auth state persistence
-const checkInitialAuth = () => {
-    if (typeof window !== 'undefined') {
-        return localStorage.getItem("isAuthenticated") === "true";
-    }
-    return false;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(checkInitialAuth());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const isAuth = localStorage.getItem("isAuthenticated") === "true";
+    // On initial load, check localStorage
+    const isAuth = typeof window !== 'undefined' && localStorage.getItem("isAuthenticated") === "true";
     setIsAuthenticated(isAuth);
   }, []);
 
