@@ -227,7 +227,7 @@ export function InventoryTab() {
         if (searchTerm) {
             activeProducts = activeProducts.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+                (p.imei && p.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
         return activeProducts;
@@ -247,7 +247,7 @@ export function InventoryTab() {
         if (searchTerm) {
             soldTransactions = soldTransactions.filter(t =>
                 t.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                t.product.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+                (t.product.imei && t.product.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
         return soldTransactions;
@@ -260,12 +260,12 @@ export function InventoryTab() {
                 const product = productMap.get(t.productId)!;
                 const partner = partnerMap.get(t.party);
                 return { ...product, transaction: t, partner };
-            }).filter(p => p);
+            }).filter(p => p && productMap.has(p.id));
         
         if (searchTerm) {
             lentProducts = lentProducts.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+                (p.imei && p.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
         return lentProducts;
@@ -831,31 +831,28 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                 />
               </div>
               
-              {productType === 'individual' && (
-                <div className="grid grid-cols-1 gap-4">
-                    <FormField
-                        control={productForm.control}
-                        name="lentTo"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Lent to</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="None" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value=" ">None</SelectItem>
-                                        {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-              )}
+              <div className="grid grid-cols-1 gap-4">
+                  <FormField
+                      control={productForm.control}
+                      name="lentTo"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Lent to</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
+                                  <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="None" />
+                                      </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                      {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                                  </SelectContent>
+                              </Select>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+              </div>
 
               <DialogFooter>
                 <DialogClose asChild>
