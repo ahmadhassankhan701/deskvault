@@ -127,7 +127,7 @@ export default function ReportsPage() {
         {Math.abs(value).toFixed(1)}% vs last period
       </div>
     );
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -159,7 +159,7 @@ export default function ReportsPage() {
                       </ChartContainer>
                   </div>
                 </CardContent>
-            </card>
+            </Card>
             <Card>
                 <CardHeader>
                     <CardTitle className="text-sm font-medium text-muted-foreground">Net Profit</CardTitle>
