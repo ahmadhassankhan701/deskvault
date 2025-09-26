@@ -487,7 +487,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             Add Product
         </Button>
     </div>
-    <Tabs value={activeTab} onValuechange={setActiveTab}>
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList>
         <TabsTrigger value="active">Active</TabsTrigger>
         <TabsTrigger value="sold">Sold</TabsTrigger>
