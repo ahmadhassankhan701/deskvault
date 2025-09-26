@@ -134,16 +134,6 @@ export function InventoryTab() {
     },
   });
 
-  const saleForm = useForm<z.infer<typeof saleSchema>>({
-    resolver: zodResolver(saleSchema),
-    defaultValues: {
-        buyerName: "",
-        buyerPhone: "",
-        sellingPrice: 0,
-        quantity: 1,
-    }
-  });
-
   const saleFormWithStockValidation = saleSchema.refine(
     (data) => {
       if (sellingProduct?.type === 'sku') {
@@ -242,7 +232,7 @@ export function InventoryTab() {
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null);
+            .filter((t): t is EnrichedTransaction => t !== null && !!t.product);
 
         if (searchTerm) {
             soldTransactions = soldTransactions.filter(t =>
