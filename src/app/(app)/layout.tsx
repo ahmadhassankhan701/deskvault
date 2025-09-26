@@ -1,3 +1,4 @@
+
 import {
   Users,
   LayoutDashboard,
@@ -20,12 +21,16 @@ import {
 import { NavLink } from '@/components/nav-link';
 import { DataProvider } from '@/context/data-context';
 import { Separator } from '@/components/ui/separator';
+import withAuth from '@/components/with-auth';
+import { AuthProvider, useAuth } from '@/context/auth-context';
 
-export default function AppLayout({
+
+function AppLayoutContent({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { logout } = useAuth();
   return (
     <DataProvider>
       <SidebarProvider>
@@ -69,7 +74,7 @@ export default function AppLayout({
             </SidebarContent>
             <SidebarFooter>
                 <Separator className='mb-2' />
-              <Button variant="ghost" className="w-full justify-start">
+              <Button variant="ghost" className="w-full justify-start" onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </Button>
@@ -83,7 +88,7 @@ export default function AppLayout({
                   DeskVault
                 </h1>
               </div>
-              <Button variant="outline">
+              <Button variant="outline" onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </Button>
@@ -115,3 +120,12 @@ export default function AppLayout({
     </DataProvider>
   );
 }
+
+
+const AppLayout = ({ children }: { children: React.ReactNode }) => (
+  <AuthProvider>
+    <AppLayoutContent>{children}</AppLayoutContent>
+  </AuthProvider>
+);
+
+export default withAuth(AppLayout);
