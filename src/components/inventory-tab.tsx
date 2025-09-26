@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package, Barcode, Hash } from "lucide-react";
+import { PlusCircle, Package, Barcode } from "lucide-react";
 
 import { products as initialProducts } from "@/lib/data";
 import type { Product } from "@/lib/types";
@@ -52,16 +52,7 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required."),
   price: z.coerce.number().min(0.01, "Price must be positive."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
-  imei: z.string().optional(),
   barcode: z.string().min(1, "Barcode is required."),
-}).refine(data => {
-    if (data.type === 'individual') {
-        return !!data.imei && data.imei.length > 0;
-    }
-    return true;
-}, {
-    message: "IMEI is required for individual products.",
-    path: ["imei"],
 });
 
 
@@ -78,7 +69,6 @@ export function InventoryTab() {
       category: "",
       stock: 0,
       price: 0,
-      imei: "",
       barcode: "",
     },
   });
@@ -88,36 +78,15 @@ export function InventoryTab() {
   useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
-      const imei = form.getValues("imei");
-      if (imei) {
-        form.setValue("barcode", imei);
-      }
-    } else {
-        const barcode = form.getValues("barcode");
-        // Clear barcode if it was previously auto-filled from IMEI
-        if (barcode === form.getValues("imei")) {
-             form.setValue("barcode", "");
-        }
-        form.clearErrors("imei");
     }
   }, [productType, form]);
-
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'imei' && value.type === 'individual') {
-        form.setValue('barcode', value.imei || '', { shouldValidate: true });
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
 
   function onSubmit(values: z.infer<typeof productSchema>) {
     const newProduct: Product = {
       id: `prod-${Date.now()}`,
       ...values,
       stock: values.type === 'individual' ? 1 : values.stock,
-      imei: values.type === 'individual' ? values.imei : undefined,
+      imei: values.type === 'individual' ? values.barcode : undefined,
     };
     setProducts([newProduct, ...products]);
     toast({
@@ -166,7 +135,6 @@ export function InventoryTab() {
               <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead>IMEI</TableHead>
               <TableHead>Barcode</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Price</TableHead>
@@ -184,7 +152,6 @@ export function InventoryTab() {
                 </TableCell>
                 <TableCell>{product.category}</TableCell>
                 <TableCell>{product.stock}</TableCell>
-                <TableCell className="font-mono text-xs">{product.imei ?? 'N/A'}</TableCell>
                 <TableCell className="font-mono text-xs">{product.barcode}</TableCell>
                 <TableCell>{getStockStatus(product.stock)}</TableCell>
                 <TableCell className="text-right">
@@ -270,24 +237,6 @@ export function InventoryTab() {
                 />
               </div>
 
-              {productType === 'individual' && (
-                <FormField
-                  control={form.control}
-                  name="imei"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center">
-                        <Hash className="mr-2 h-4 w-4" /> IMEI
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter unique IMEI" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
               <FormField
                 control={form.control}
                 name="barcode"
@@ -297,7 +246,7 @@ export function InventoryTab() {
                       <Barcode className="mr-2 h-4 w-4" /> Barcode
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder={productType === 'individual' ? "IMEI will be used as barcode" : "Enter barcode"} {...field} disabled={productType === 'individual'} />
+                      <Input placeholder="Enter unique barcode or IMEI" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

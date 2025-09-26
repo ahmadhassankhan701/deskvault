@@ -7,7 +7,7 @@ export type Product = {
   category: string;
   stock: number;
   price: number;
-  imei?: string;
+  imei?: string; // IMEI is the barcode for individual items
   barcode: string;
 };
 
