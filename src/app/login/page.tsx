@@ -81,7 +81,7 @@ export default function LoginPage() {
                   <FormControl>
                     <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input type="email" placeholder="name@example.com" className="pl-10" {...field} />
+                        <Input type="email" placeholder="name@example.com" className="pl-10" {...field} autoComplete="off" />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -97,7 +97,7 @@ export default function LoginPage() {
                    <FormControl>
                     <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input type="password" placeholder="••••••••" className="pl-10" {...field} />
+                        <Input type="password" placeholder="••••••••" className="pl-10" {...field} autoComplete="off" />
                     </div>
                   </FormControl>
                   <FormMessage />
