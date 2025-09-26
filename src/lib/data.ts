@@ -10,7 +10,7 @@ export const products: Product[] = [
   { id: "prod-6", type: "sku", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", imei: "8901234567893" },
   { id: "prod-7", type: "individual", name: "Macbook Pro 14 inch", stock: 1, price: 2499.00, category: "Laptops", imei: "112233445566778"},
   { id: "prod-8", type: "individual", name: "iPhone 15 Pro", stock: 0, price: 999.00, category: "Mobiles", imei: "887766554433221"},
-  { id: "prod-9", type: "individual", name: "iPad Air", stock: 0, price: 799.00, category: "Tablets", imei: "123123123123123"},
+  { id: "prod-9", type: "individual", name: "iPad Air", stock: 1, price: 799.00, category: "Tablets", imei: "123123123123123"},
   { id: "prod-10", type: "individual", name: "Galaxy S24 Ultra", stock: 0, price: 1299.00, category: "Mobiles", imei: "321321321321321"},
 ];
 
@@ -21,6 +21,8 @@ export const partners: Partner[] = [
     { id: "partner-4", type: "individual", name: "Freelancer Bob", phone: "555-0104" },
     { id: "partner-5", type: "shop", name: "Tech Distributors", phone: "555-0105", shopName: "Tech Distributors" },
     { id: "partner-6", type: "individual", name: "Alice", phone: "555-0106" },
+    { id: "partner-7", type: "individual", name: "Startup Hub", phone: "555-0107" },
+    { id: "partner-8", type: "individual", name: "Creative Agency", phone: "555-0108" },
 ];
 
 export const transactions: Transaction[] = [
@@ -84,13 +86,13 @@ export const transactions: Transaction[] = [
     date: subMonths(new Date(), 2).toISOString(),
     party: "Startup Hub",
   },
-   {
-    id: "txn-7",
-    productId: "prod-7",
+  {
+    id: "txn-8",
+    productId: "prod-8",
     type: "sale",
     quantity: 1,
-    price: 2499.00,
-    totalAmount: 2499.00,
+    price: 999.00,
+    totalAmount: 999.00,
     date: subMonths(new Date(), 1).toISOString(),
     party: "Creative Agency",
   },
@@ -153,5 +155,3 @@ export const expenses: Expense[] = [
         amount: 2500.00
     },
 ];
-
-    

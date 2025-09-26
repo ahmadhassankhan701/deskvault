@@ -224,15 +224,15 @@ export function InventoryTab() {
     }
 
     if (activeTab === 'sold') {
-        const soldItems = transactions
+        let soldItems = transactions
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
-                if (!product) return null; // If product not found, return null
+                if (!product) return null;
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null); // Filter out nulls
+            .filter((t): t is EnrichedTransaction => t !== null); 
 
         if (searchTerm) {
             return soldItems.filter(t =>
