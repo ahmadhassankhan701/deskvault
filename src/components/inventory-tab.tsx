@@ -257,12 +257,13 @@ export function InventoryTab() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Peripherals">Peripherals</SelectItem>
-                          <SelectItem value="Displays">Displays</SelectItem>
-                          <SelectItem value="Furniture">Furniture</SelectItem>
+                          <SelectItem value="Laptops">Laptops</SelectItem>
+                          <SelectItem value="Mobiles">Mobiles</SelectItem>
+                          <SelectItem value="Tablets">Tablets</SelectItem>
+                          <SelectItem value="Chargers & Cables">Chargers & Cables</SelectItem>
+                          <SelectItem value="Cases & Covers">Cases & Covers</SelectItem>
                           <SelectItem value="Audio">Audio</SelectItem>
                           <SelectItem value="Accessories">Accessories</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
