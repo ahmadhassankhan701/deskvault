@@ -39,8 +39,8 @@ export default function AppLayout({
                 </h1>
               </div>
             </SidebarHeader>
-            <SidebarContent className="justify-center">
-              <SidebarMenu className="px-4 flex flex-col gap-y-2">
+            <SidebarContent>
+              <SidebarMenu className="mt-20 px-4">
                 <SidebarMenuItem>
                   <NavLink href="/reports">
                     <LayoutDashboard />
