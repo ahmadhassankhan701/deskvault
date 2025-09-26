@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +8,6 @@ import { PlusCircle, MoreHorizontal, User, Building } from "lucide-react";
 
 import { partners as initialPartners } from "@/lib/data";
 import type { Partner } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,15 +49,18 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const partnerSchema = z.object({
   type: z.enum(["individual", "shop"]),
@@ -80,6 +81,9 @@ const partnerSchema = z.object({
 export function PartnersTab() {
   const [partners, setPartners] = useState<Partner[]>(initialPartners);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [partnerToDelete, setPartnerToDelete] = useState<Partner | null>(null);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof partnerSchema>>({
@@ -91,23 +95,78 @@ export function PartnersTab() {
       shopName: "",
     },
   });
-
+  
   const partnerType = form.watch("type");
+  
+  useEffect(() => {
+    if (editingPartner) {
+      form.reset({
+        type: editingPartner.type,
+        name: editingPartner.name,
+        phone: editingPartner.phone,
+        shopName: editingPartner.shopName || "",
+      });
+    } else {
+      form.reset({
+        type: "individual",
+        name: "",
+        phone: "",
+        shopName: "",
+      });
+    }
+  }, [editingPartner, form]);
+
+  const handleAddNew = () => {
+    setEditingPartner(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleEdit = (partner: Partner) => {
+    setEditingPartner(partner);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = (partner: Partner) => {
+    setPartnerToDelete(partner);
+    setIsDeleteAlertOpen(true);
+  };
+  
+  const confirmDelete = () => {
+    if (partnerToDelete) {
+      setPartners(partners.filter(p => p.id !== partnerToDelete.id));
+      toast({
+        title: "Partner Deleted",
+        description: `${partnerToDelete.name} has been removed.`,
+      });
+    }
+    setIsDeleteAlertOpen(false);
+    setPartnerToDelete(null);
+  }
 
   function onSubmit(values: z.infer<typeof partnerSchema>) {
-    const newPartner: Partner = {
-      id: `partner-${Date.now()}`,
-      ...values,
-      shopName: values.type === 'shop' ? values.shopName : undefined,
-    };
-
-    setPartners([newPartner, ...partners]);
-    toast({
-      title: "Partner Added",
-      description: `${values.name} has been added to your partners list.`,
-    });
+    if (editingPartner) {
+      const updatedPartners = partners.map(p => 
+        p.id === editingPartner.id ? { ...p, ...values, shopName: values.type === 'shop' ? values.shopName : undefined } : p
+      );
+      setPartners(updatedPartners);
+      toast({
+        title: "Partner Updated",
+        description: `${values.name} has been updated.`,
+      });
+    } else {
+      const newPartner: Partner = {
+        id: `partner-${Date.now()}`,
+        ...values,
+        shopName: values.type === 'shop' ? values.shopName : undefined,
+      };
+      setPartners([newPartner, ...partners]);
+      toast({
+        title: "Partner Added",
+        description: `${values.name} has been added to your partners list.`,
+      });
+    }
     setIsDialogOpen(false);
-    form.reset();
+    setEditingPartner(null);
   }
 
   return (
@@ -120,7 +179,7 @@ export function PartnersTab() {
               Manage your suppliers, customers, and other partners.
             </CardDescription>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)} size="sm">
+          <Button onClick={handleAddNew} size="sm">
             <PlusCircle className="mr-2" />
             Add Partner
           </Button>
@@ -158,8 +217,8 @@ export function PartnersTab() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(partner)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDelete(partner)} className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -170,12 +229,12 @@ export function PartnersTab() {
         </CardContent>
       </Card>
       
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { setIsDialogOpen(isOpen); if (!isOpen) setEditingPartner(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Partner</DialogTitle>
+            <DialogTitle>{editingPartner ? 'Edit Partner' : 'Add New Partner'}</DialogTitle>
             <DialogDescription>
-              Enter the details for your new partner.
+              {editingPartner ? 'Update the details for your partner.' : 'Enter the details for your new partner.'}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -189,7 +248,7 @@ export function PartnersTab() {
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                         className="flex items-center space-x-4"
                       >
                         <FormItem className="flex items-center space-x-2 space-y-0">
@@ -264,12 +323,28 @@ export function PartnersTab() {
                     Cancel
                   </Button>
                 </DialogClose>
-                <Button type="submit">Add Partner</Button>
+                <Button type="submit">{editingPartner ? 'Save Changes' : 'Add Partner'}</Button>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the partner
+              "{partnerToDelete?.name}" from your records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPartnerToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
