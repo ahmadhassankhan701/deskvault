@@ -95,7 +95,8 @@ const productSchema = z.object({
 const saleSchema = z.object({
   buyerName: z.string().min(1, "Buyer name is required."),
   buyerPhone: z.string().min(1, "Buyer phone is required."),
-  sellingPrice: z.coerce.number().min(0, "Selling price must be positive."),
+  sellingPrice: z.coerce.number().min(0.01, "Selling price must be positive."),
+  quantity: z.coerce.number().int().min(1, "Quantity must be at least 1."),
 });
 
 
@@ -138,7 +139,31 @@ export function InventoryTab() {
         buyerName: "",
         buyerPhone: "",
         sellingPrice: 0,
+        quantity: 1,
     }
+  });
+
+  const saleFormWithStockValidation = saleSchema.refine(
+    (data) => {
+      if (sellingProduct?.type === 'sku') {
+        return data.quantity <= sellingProduct.stock;
+      }
+      return true;
+    },
+    {
+      message: "Cannot sell more than available in stock.",
+      path: ["quantity"],
+    }
+  );
+
+  const saleFormValidated = useForm<z.infer<typeof saleSchema>>({
+    resolver: zodResolver(saleFormWithStockValidation),
+    defaultValues: {
+      buyerName: "",
+      buyerPhone: "",
+      sellingPrice: 0,
+      quantity: 1,
+    },
   });
   
   const productType = productForm.watch("type");
@@ -171,13 +196,14 @@ export function InventoryTab() {
 
   useEffect(() => {
     if (sellingProduct) {
-        saleForm.reset({
+        saleFormValidated.reset({
             sellingPrice: sellingProduct.price,
             buyerName: "",
             buyerPhone: "",
+            quantity: 1,
         });
     }
-  }, [sellingProduct, saleForm]);
+  }, [sellingProduct, saleFormValidated]);
   
   useEffect(() => {
     if (productType === "individual" && !editingProduct) {
@@ -342,14 +368,16 @@ export function InventoryTab() {
         setPartners(prev => [newPartner, ...prev]);
         partner = newPartner;
     }
+    
+    const quantitySold = sellingProduct.type === 'individual' ? 1 : values.quantity;
 
     const saleTransaction: Transaction = {
         id: `txn-${Date.now()}`,
         productId: sellingProduct.id,
         type: 'sale',
-        quantity: 1,
+        quantity: quantitySold,
         price: values.sellingPrice,
-        totalAmount: values.sellingPrice,
+        totalAmount: values.sellingPrice * quantitySold,
         date: new Date().toISOString(),
         party: partner.name,
     };
@@ -358,7 +386,7 @@ export function InventoryTab() {
 
     setProducts(prev => prev.map(p => 
         p.id === sellingProduct.id 
-        ? { ...p, stock: p.stock - 1 }
+        ? { ...p, stock: p.stock - quantitySold }
         : p
     ));
 
@@ -511,9 +539,10 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
       </TableHeader>
       <TableBody>
         {filteredProducts.map((p) => {
-            const salePrice = p.transaction?.totalAmount ?? 0;
+            const salePrice = p.transaction?.price ?? 0;
+            const quantity = p.transaction?.quantity ?? 1;
             const purchasePrice = p.price;
-            const profit = salePrice - purchasePrice;
+            const profit = (salePrice - purchasePrice) * quantity;
             
             return (
               <TableRow key={p.id}>
@@ -829,10 +858,10 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                     Record a sale for "{sellingProduct?.name}".
                 </DialogDescription>
             </DialogHeader>
-            <Form {...saleForm}>
-                <form onSubmit={saleForm.handleSubmit(onSaleSubmit)} className="space-y-4">
+            <Form {...saleFormValidated}>
+                <form onSubmit={saleFormValidated.handleSubmit(onSaleSubmit)} className="space-y-4">
                     <FormField
-                        control={saleForm.control}
+                        control={saleFormValidated.control}
                         name="buyerName"
                         render={({ field }) => (
                             <FormItem>
@@ -845,7 +874,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         )}
                     />
                     <FormField
-                        control={saleForm.control}
+                        control={saleFormValidated.control}
                         name="buyerPhone"
                         render={({ field }) => (
                             <FormItem>
@@ -858,11 +887,11 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         )}
                     />
                      <FormField
-                        control={saleForm.control}
+                        control={saleFormValidated.control}
                         name="sellingPrice"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Selling Price</FormLabel>
+                                <FormLabel>Selling Price (per item)</FormLabel>
                                 <FormControl>
                                     <Input type="number" step="0.01" {...field} />
                                 </FormControl>
@@ -870,6 +899,21 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                             </FormItem>
                         )}
                     />
+                    {sellingProduct?.type === 'sku' && (
+                        <FormField
+                            control={saleFormValidated.control}
+                            name="quantity"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Quantity</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" min={1} max={sellingProduct?.stock} {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    )}
                     <DialogFooter>
                         <DialogClose asChild>
                         <Button type="button" variant="secondary">
