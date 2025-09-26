@@ -94,16 +94,18 @@ export function InventoryTab() {
       }
     } else {
         const barcode = form.getValues("barcode");
+        // Clear barcode if it was previously auto-filled from IMEI
         if (barcode === form.getValues("imei")) {
              form.setValue("barcode", "");
         }
+        form.clearErrors("imei");
     }
   }, [productType, form]);
 
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === 'imei' && value.type === 'individual') {
-        form.setValue('barcode', value.imei || '');
+        form.setValue('barcode', value.imei || '', { shouldValidate: true });
       }
     });
     return () => subscription.unsubscribe();
@@ -292,10 +294,10 @@ export function InventoryTab() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center">
-                      <ScanBarcode className="mr-2 h-4 w-4" /> IMEI / Barcode
+                      <ScanBarcode className="mr-2 h-4 w-4" /> Barcode
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter or scan barcode" {...field} disabled={productType === 'individual'} />
+                      <Input placeholder={productType === 'individual' ? "IMEI will be used as barcode" : "Enter or scan barcode"} {...field} disabled={productType === 'individual'} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
