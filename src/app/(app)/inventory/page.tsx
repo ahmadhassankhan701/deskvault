@@ -227,9 +227,10 @@ export default function InventoryPage() {
             .map(t => {
                 const product = productMap.get(t.productId);
                 const partner = partnerMap.get(t.party);
+                // The `product` can be undefined if it has been deleted.
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => !!t.product);
+            .filter((t): t is EnrichedTransaction => !!t.product); // This is the crucial filtering step.
 
         if (searchTerm) {
             return soldTransactions.filter(t =>
@@ -526,37 +527,37 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableHead>Sold To</TableHead>
           <TableHead>Selling Date</TableHead>
           <TableHead>IMEI</TableHead>
-          <TableHead className="text-right">Purchase Price</TableHead>
-          <TableHead className="text-right">Sold Price</TableHead>
+          <TableHead className="text-right">Total Purchase Price</TableHead>
+          <TableHead className="text-right">Total Sold Price</TableHead>
           <TableHead className="text-right">Profit</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {(filteredProducts as EnrichedTransaction[]).map((t) => {
-            const salePrice = t.price ?? 0;
             const quantity = t.quantity ?? 1;
-            const purchasePrice = t.product?.price || 0;
-            const profit = (salePrice - purchasePrice) * quantity;
+            const totalSoldPrice = t.totalAmount;
+            const totalPurchasePrice = (t.product?.price || 0) * quantity;
+            const profit = totalSoldPrice - totalPurchasePrice;
             
             if (!t.product) return null;
 
             return (
               <TableRow key={t.id}>
-                <TableCell className="font-medium">{t.product.name}</TableCell>
+                <TableCell className="font-medium">{t.product?.name}</TableCell>
                 <TableCell>
-                  <Badge variant={t.product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
+                  <Badge variant={t.product?.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
                     <Package className="h-3 w-3" />
-                    {t.product.type}
+                    {t.product?.type} (x{t.quantity})
                   </Badge>
                 </TableCell>
                 <SoldToCell partner={t.partner} />
                 <TableCell>{format(new Date(t.date), "MMM d, yyyy, h:mm a")}</TableCell>
-                <TableCell className="font-mono text-xs">{t.product.imei}</TableCell>
+                <TableCell className="font-mono text-xs">{t.product?.imei}</TableCell>
                 <TableCell className="text-right">
-                  ${purchasePrice.toFixed(2)}
+                  ${totalPurchasePrice.toFixed(2)}
                 </TableCell>
                 <TableCell className="text-right">
-                  ${salePrice.toFixed(2)}
+                  ${totalSoldPrice.toFixed(2)}
                 </TableCell>
                 <TableCell className={`text-right font-medium ${getProfitClassName(profit)}`}>
                   ${profit.toFixed(2)}
@@ -945,5 +946,3 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </>
   );
 }
-
-    
