@@ -45,6 +45,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const productSchema = z.object({
   type: z.enum(["individual", "sku"]),
@@ -164,7 +171,7 @@ export function InventoryTab() {
                 </TableCell>
                 <TableCell>{product.category}</TableCell>
                 <TableCell>{product.stock}</TableCell>
-                <TableCell className="font-mono text-xs">{product.barcode}</TableCell>
+                <TableCell className="font-mono text-xs">{product.imei}</TableCell>
                 <TableCell>{getStockStatus(product.stock)}</TableCell>
                 <TableCell className="text-right">
                   ${product.price.toFixed(2)}
@@ -240,9 +247,24 @@ export function InventoryTab() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Electronics" {...field} />
-                      </FormControl>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Peripherals">Peripherals</SelectItem>
+                          <SelectItem value="Displays">Displays</SelectItem>
+                          <SelectItem value="Furniture">Furniture</SelectItem>
+                          <SelectItem value="Audio">Audio</SelectItem>
+                          <SelectItem value="Accessories">Accessories</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
