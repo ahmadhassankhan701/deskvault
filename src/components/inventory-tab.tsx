@@ -7,7 +7,7 @@ import { z } from "zod";
 import { PlusCircle, Package, Search, User, Building, Phone, MoreHorizontal } from "lucide-react";
 import { format } from 'date-fns';
 
-import { products as initialProducts, transactions, partners } from "@/lib/data";
+import { products as initialProducts, transactions as initialTransactions, partners } from "@/lib/data";
 import type { Product, Transaction, Partner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,6 +79,8 @@ const productSchema = z.object({
   price: z.coerce.number().min(0, "Price cannot be negative."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
   imei: z.string().min(1, "IMEI is required."),
+  borrowedFrom: z.string().optional(),
+  lentTo: z.string().optional(),
 }).refine(data => {
     if (data.type === 'individual') {
         return data.stock === 1;
@@ -87,6 +89,11 @@ const productSchema = z.object({
 }, {
     message: "Stock must be 1 for individual products.",
     path: ["stock"],
+}).refine(data => {
+    return !(data.borrowedFrom && data.lentTo);
+}, {
+    message: "A product cannot be borrowed and lent at the same time.",
+    path: ["lentTo"],
 });
 
 
@@ -94,6 +101,7 @@ type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner 
 
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
@@ -111,6 +119,8 @@ export function InventoryTab() {
       stock: 0,
       price: 0,
       imei: "",
+      borrowedFrom: "",
+      lentTo: "",
     },
   });
   
@@ -125,6 +135,8 @@ export function InventoryTab() {
         price: editingProduct.price,
         stock: editingProduct.stock,
         imei: editingProduct.imei,
+        borrowedFrom: "",
+        lentTo: "",
       });
     } else {
       form.reset({
@@ -134,6 +146,8 @@ export function InventoryTab() {
         stock: 0,
         price: 0,
         imei: "",
+        borrowedFrom: "",
+        lentTo: "",
       });
     }
   }, [editingProduct, form]);
@@ -141,6 +155,8 @@ export function InventoryTab() {
   useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
+      form.setValue("borrowedFrom", "");
+      form.setValue("lentTo", "");
     } else {
       if (form.getValues("stock") === 1 && !editingProduct) {
           form.setValue("stock", 0);
@@ -159,7 +175,13 @@ export function InventoryTab() {
     const sourceProducts = products;
 
     if (activeTab === 'active') {
-        tabProducts = sourceProducts.filter(p => p.stock > 0 && !transactions.some(t => t.productId === p.id && (t.type === 'sale' || t.type === 'lend-out')));
+        const productIdsInActiveTransactions = new Set(transactions
+            .filter(t => ['sale', 'lend-out', 'borrow-in'].includes(t.type))
+            .map(t => t.productId)
+        );
+
+        tabProducts = sourceProducts.filter(p => p.stock > 0 && !productIdsInActiveTransactions.has(p.id));
+
     } else {
         const relevantTxnTypes: string[] = {
             'sold': ['sale'],
@@ -191,7 +213,7 @@ export function InventoryTab() {
     return enriched.filter(product =>
       product.imei.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [activeTab, searchTerm, products]);
+  }, [activeTab, searchTerm, products, transactions]);
   
   const handleAddNew = () => {
     setEditingProduct(null);
@@ -221,6 +243,8 @@ export function InventoryTab() {
   }
 
   function onSubmit(values: z.infer<typeof productSchema>) {
+    let productId = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
+    
     if (editingProduct) {
       const updatedProducts = products.map(p =>
         p.id === editingProduct.id ? { ...p, ...values, imei: values.imei, stock: values.type === 'individual' ? 1 : values.stock } : p
@@ -232,7 +256,7 @@ export function InventoryTab() {
       });
     } else {
       const newProduct: Product = {
-        id: `prod-${Date.now()}`,
+        id: productId,
         ...values,
         stock: values.type === 'individual' ? 1 : values.stock,
       };
@@ -242,6 +266,37 @@ export function InventoryTab() {
         description: `${values.name} has been added to the inventory.`,
       });
     }
+    
+    // Create transaction if needed
+    if (values.borrowedFrom) {
+        const newTransaction: Transaction = {
+            id: `txn-${Date.now()}`,
+            productId: productId,
+            type: 'borrow-in',
+            quantity: 1,
+            price: 0,
+            totalAmount: 0,
+            date: new Date().toISOString(),
+            party: values.borrowedFrom
+        };
+        setTransactions(prev => [newTransaction, ...prev]);
+        toast({ title: "Product Borrowed", description: `Logged borrow-in for ${values.name} from ${values.borrowedFrom}.` });
+    } else if (values.lentTo) {
+         const newTransaction: Transaction = {
+            id: `txn-${Date.now()}`,
+            productId: productId,
+            type: 'lend-out',
+            quantity: 1,
+            price: 0,
+            totalAmount: 0,
+            date: new Date().toISOString(),
+            party: values.lentTo
+        };
+        setTransactions(prev => [newTransaction, ...prev]);
+        toast({ title: "Product Lent", description: `Logged lend-out for ${values.name} to ${values.lentTo}.` });
+    }
+
+
     setIsDialogOpen(false);
     setEditingProduct(null);
   }
@@ -432,7 +487,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             Add Product
         </Button>
     </div>
-    <Tabs value={activeTab} onValueChange={setActiveTab}>
+    <Tabs value={activeTab} onValuechange={setActiveTab}>
       <TabsList>
         <TabsTrigger value="active">Active</TabsTrigger>
         <TabsTrigger value="sold">Sold</TabsTrigger>
@@ -645,6 +700,54 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                   )}
                 />
               </div>
+              
+              {productType === 'individual' && !editingProduct && (
+                <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="borrowedFrom"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Borrowed from</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="None" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="">None</SelectItem>
+                                        {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="lentTo"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Lent to</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="None" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="">None</SelectItem>
+                                        {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+              )}
+
               <DialogFooter>
                 <DialogClose asChild>
                   <Button type="button" variant="secondary">
@@ -676,3 +779,5 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </>
   );
 }
+
+    
