@@ -148,7 +148,6 @@ export function InventoryTab() {
   useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
-      form.setValue("lentTo", "");
     } else {
       if (form.getValues("stock") === 1 && !editingProduct) {
           form.setValue("stock", 0);
@@ -180,11 +179,11 @@ export function InventoryTab() {
             'lent': ['lend-out'],
         }[activeTab] || [];
         
-        const productIdsInTransactions = transactions
+        const productIdsInTransactions = new Set(transactions
             .filter(t => relevantTxnTypes.includes(t.type))
-            .map(t => t.productId);
+            .map(t => t.productId));
             
-        tabProducts = sourceProducts.filter(p => productIdsInTransactions.includes(p.id));
+        tabProducts = sourceProducts.filter(p => productIdsInTransactions.has(p.id));
     }
 
     let enriched = tabProducts.map(p => {
@@ -393,7 +392,14 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </Table>
   );
 
-  const renderSoldTable = () => (
+  const renderSoldTable = () => {
+    const getProfitClassName = (profit: number) => {
+        if (profit > 0) return 'text-green-600';
+        if (profit < 0) return 'text-red-600';
+        return 'text-muted-foreground';
+    }
+    
+    return (
      <Table>
       <TableHeader>
         <TableRow>
@@ -401,24 +407,38 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableHead>Sold To</TableHead>
           <TableHead>Selling Date</TableHead>
           <TableHead>IMEI</TableHead>
+          <TableHead className="text-right">Purchase Price</TableHead>
           <TableHead className="text-right">Sold Price</TableHead>
+          <TableHead className="text-right">Profit</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filteredProducts.map(({id, name, transaction, partner, imei}) => (
-          <TableRow key={id}>
-            <TableCell className="font-medium">{name}</TableCell>
-            <SoldToCell partner={partner} />
-            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
-            <TableCell className="font-mono text-xs">{imei}</TableCell>
-            <TableCell className="text-right">
-              ${transaction?.totalAmount.toFixed(2) ?? '0.00'}
-            </TableCell>
-          </TableRow>
-        ))}
+        {filteredProducts.map((p) => {
+            const salePrice = p.transaction?.totalAmount ?? 0;
+            const purchasePrice = p.price;
+            const profit = salePrice - purchasePrice;
+            
+            return (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.name}</TableCell>
+                <SoldToCell partner={p.partner} />
+                <TableCell>{p.transaction ? format(new Date(p.transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
+                <TableCell className="font-mono text-xs">{p.imei}</TableCell>
+                <TableCell className="text-right">
+                  ${purchasePrice.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-right">
+                  ${salePrice.toFixed(2)}
+                </TableCell>
+                <TableCell className={`text-right font-medium ${getProfitClassName(profit)}`}>
+                  ${profit.toFixed(2)}
+                </TableCell>
+              </TableRow>
+            );
+        })}
       </TableBody>
     </Table>
-  );
+  )};
 
   const renderLentTable = () => (
     <Table>
@@ -667,7 +687,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Lent to</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || ""}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="None" />
