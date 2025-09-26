@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package, Search, User, Building, Phone } from "lucide-react";
+import { PlusCircle, Package, Search, User, Building, Phone, MoreHorizontal } from "lucide-react";
 import { format } from 'date-fns';
 
 import { products as initialProducts, transactions, partners } from "@/lib/data";
@@ -35,6 +35,22 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -79,6 +95,9 @@ type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner 
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
@@ -98,14 +117,36 @@ export function InventoryTab() {
   const productType = form.watch("type");
 
   useEffect(() => {
+    if (editingProduct) {
+      form.reset({
+        type: editingProduct.type,
+        name: editingProduct.name,
+        category: editingProduct.category,
+        price: editingProduct.price,
+        stock: editingProduct.stock,
+        imei: editingProduct.imei,
+      });
+    } else {
+      form.reset({
+        type: "sku",
+        name: "",
+        category: "",
+        stock: 0,
+        price: 0,
+        imei: "",
+      });
+    }
+  }, [editingProduct, form]);
+  
+  useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
     } else {
-      if (form.getValues("stock") === 1) {
+      if (form.getValues("stock") === 1 && !editingProduct) {
           form.setValue("stock", 0);
       }
     }
-  }, [productType, form]);
+  }, [productType, form, editingProduct]);
 
  const filteredProducts = useMemo((): EnrichedProduct[] => {
     const transactionMap = new Map<string, Transaction>();
@@ -115,9 +156,10 @@ export function InventoryTab() {
     partners.forEach(p => partnerMap.set(p.name, p));
 
     let tabProducts: Product[] = [];
+    const sourceProducts = products;
 
     if (activeTab === 'active') {
-        tabProducts = initialProducts.filter(p => p.stock > 0 && !transactions.some(t => t.productId === p.id && (t.type === 'sale' || t.type === 'lend-out')));
+        tabProducts = sourceProducts.filter(p => p.stock > 0 && !transactions.some(t => t.productId === p.id && (t.type === 'sale' || t.type === 'lend-out')));
     } else {
         const relevantTxnTypes: string[] = {
             'sold': ['sale'],
@@ -129,7 +171,7 @@ export function InventoryTab() {
             .filter(t => relevantTxnTypes.includes(t.type))
             .map(t => t.productId);
             
-        tabProducts = initialProducts.filter(p => productIdsInTransactions.includes(p.id));
+        tabProducts = sourceProducts.filter(p => productIdsInTransactions.includes(p.id));
     }
 
     let enriched = tabProducts.map(p => {
@@ -149,23 +191,59 @@ export function InventoryTab() {
     return enriched.filter(product =>
       product.imei.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [activeTab, searchTerm]);
+  }, [activeTab, searchTerm, products]);
+  
+  const handleAddNew = () => {
+    setEditingProduct(null);
+    setIsDialogOpen(true);
+  };
+  
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+    setIsDialogOpen(true);
+  };
 
+  const handleDelete = (product: Product) => {
+    setProductToDelete(product);
+    setIsDeleteAlertOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (productToDelete) {
+      setProducts(products.filter(p => p.id !== productToDelete.id));
+      toast({
+        title: "Product Deleted",
+        description: `${productToDelete.name} has been removed.`,
+      });
+    }
+    setIsDeleteAlertOpen(false);
+    setProductToDelete(null);
+  }
 
   function onSubmit(values: z.infer<typeof productSchema>) {
-    const newProduct: Product = {
-      id: `prod-${Date.now()}`,
-      barcode: values.imei, // Using imei as barcode
-      ...values,
-      stock: values.type === 'individual' ? 1 : values.stock,
-    };
-    setProducts([newProduct, ...products]);
-    toast({
-      title: "Product Added",
-      description: `${values.name} has been added to the inventory.`,
-    });
+    if (editingProduct) {
+      const updatedProducts = products.map(p =>
+        p.id === editingProduct.id ? { ...p, ...values, imei: values.imei, stock: values.type === 'individual' ? 1 : values.stock } : p
+      );
+      setProducts(updatedProducts);
+      toast({
+        title: "Product Updated",
+        description: `${values.name} has been updated.`,
+      });
+    } else {
+      const newProduct: Product = {
+        id: `prod-${Date.now()}`,
+        ...values,
+        stock: values.type === 'individual' ? 1 : values.stock,
+      };
+      setProducts([newProduct, ...products]);
+      toast({
+        title: "Product Added",
+        description: `${values.name} has been added to the inventory.`,
+      });
+    }
     setIsDialogOpen(false);
-    form.reset();
+    setEditingProduct(null);
   }
 
   const getStockStatus = (stock: number) => {
@@ -244,6 +322,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableHead>IMEI</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="text-right">Price</TableHead>
+          <TableHead><span className="sr-only">Actions</span></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -262,6 +341,19 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             <TableCell>{getStockStatus(product.stock)}</TableCell>
             <TableCell className="text-right">
               ${product.price.toFixed(2)}
+            </TableCell>
+            <TableCell className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleEdit(product)}>Edit</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDelete(product)} className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TableCell>
           </TableRow>
         ))}
@@ -335,7 +427,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                 />
             </div>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} size="sm">
+        <Button onClick={handleAddNew} size="sm">
             <PlusCircle className="mr-2 h-4 w-4" />
             Add Product
         </Button>
@@ -421,12 +513,12 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
       </TabsContent>
     </Tabs>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { setIsDialogOpen(isOpen); if (!isOpen) setEditingProduct(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add New Product</DialogTitle>
+            <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
             <DialogDescription>
-              Enter the details of the new product to add to your inventory.
+              {editingProduct ? 'Update the details of your product.' : 'Enter the details of the new product to add to your inventory.'}
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -440,7 +532,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                         className="flex items-center space-x-4"
                       >
                         <FormItem className="flex items-center space-x-2 space-y-0">
@@ -488,7 +580,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                       <FormLabel>Category</FormLabel>
                        <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -559,12 +651,28 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                     Cancel
                   </Button>
                 </DialogClose>
-                <Button type="submit">Add Product</Button>
+                <Button type="submit">{editingProduct ? 'Save Changes' : 'Add Product'}</Button>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the product
+              "{productToDelete?.name}" from your inventory.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

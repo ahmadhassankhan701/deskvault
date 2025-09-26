@@ -8,7 +8,6 @@ export type Product = {
   stock: number;
   price: number;
   imei: string;
-  barcode: string; 
 };
 
 export type Partner = {
