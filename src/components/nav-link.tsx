@@ -32,8 +32,8 @@ export function NavLink({ href, size, children, ...props }: NavLinkProps) {
     <Link
       href={href}
       className={cn(
-        'group flex w-full items-center gap-2 rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50',
-        isActive && 'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
+        'group flex w-full items-center gap-2 rounded-md p-2 text-left text-sm font-medium text-sidebar-foreground outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50',
+        isActive && 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm',
         size === 'sm' && 'flex-col h-auto py-1 px-2 text-xs gap-1'
       )}
       {...props}

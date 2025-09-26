@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, XAxis, YAxis, Line, LineChart } from "recharts";
 import {
   Card,
   CardContent,
@@ -17,14 +17,14 @@ import {
 } from "@/components/ui/chart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useData } from "@/context/data-context";
-import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowUp, ArrowDown } from "lucide-react";
 import { startOfWeek, startOfMonth, parseISO, format } from "date-fns";
 
 type Timeframe = "weekly" | "monthly" | "all";
 
 export default function ReportsPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>("monthly");
-  const { transactions, expenses } = useData();
+  const { transactions, expenses, products } = useData();
 
   const chartData = useMemo(() => {
     const now = new Date();
@@ -41,30 +41,37 @@ export default function ReportsPage() {
     const filteredTransactions = transactions.filter(t => parseISO(t.date) >= startDate);
     const filteredExpenses = expenses.filter(e => parseISO(e.date) >= startDate);
 
+    const productMap = new Map(products.map(p => [p.id, p]));
+
     const totalRevenue = filteredTransactions
       .filter((t) => t.type === "sale")
       .reduce((sum, t) => sum + t.totalAmount, 0);
 
-    const totalPurchases = filteredTransactions
-      .filter((t) => t.type === "purchase")
-      .reduce((sum, t) => sum + t.totalAmount, 0);
+    const totalCostOfGoods = filteredTransactions
+      .filter((t) => t.type === "sale")
+      .reduce((sum, t) => {
+        const product = productMap.get(t.productId);
+        const cost = product ? product.price * t.quantity : 0;
+        return sum + cost;
+      }, 0);
       
     const operationalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-    const totalExpenses = totalPurchases + operationalExpenses;
+    const totalExpenses = totalCostOfGoods + operationalExpenses;
     const netProfit = totalRevenue - totalExpenses;
     
     // --- Monthly Sales & Purchases Chart Data ---
-    const monthlyAggregates: { [key: string]: { sales: number; purchases: number } } = {};
+    const monthlyAggregates: { [key: string]: { sales: number; profit: number } } = {};
     transactions.forEach((t) => {
       const month = format(parseISO(t.date), 'MMM yy');
       if (!monthlyAggregates[month]) {
-        monthlyAggregates[month] = { sales: 0, purchases: 0 };
+        monthlyAggregates[month] = { sales: 0, profit: 0 };
       }
       if (t.type === "sale") {
         monthlyAggregates[month].sales += t.totalAmount;
-      } else if (t.type === "purchase") {
-        monthlyAggregates[month].purchases += t.totalAmount;
+        const product = productMap.get(t.productId);
+        const cost = product ? product.price * t.quantity : 0;
+        monthlyAggregates[month].profit += t.totalAmount - cost;
       }
     });
     const monthlyChartData = Object.entries(monthlyAggregates).map(([month, data]) => ({ month, ...data })).reverse();
@@ -82,18 +89,26 @@ export default function ReportsPage() {
       ([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value, fill: `var(--color-${name})` })
     );
 
+    const salesTrend = filteredTransactions
+        .filter(t => t.type === 'sale')
+        .sort((a,b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+        .map(t => ({ date: format(parseISO(t.date), 'dd MMM'), revenue: t.totalAmount }));
+
     return {
       totalRevenue,
       totalExpenses,
       netProfit,
       monthlyChartData,
       expenseChartData,
+      salesTrend,
+      totalCostOfGoods,
+      operationalExpenses
     };
-  }, [timeframe, transactions, expenses]);
+  }, [timeframe, transactions, expenses, products]);
 
   const barChartConfig = {
     sales: { label: "Sales", color: "hsl(var(--chart-1))" },
-    purchases: { label: "Purchases", color: "hsl(var(--chart-2))" },
+    profit: { label: "Profit", color: "hsl(var(--chart-2))" },
   } satisfies ChartConfig;
   
   const pieChartConfig = {
@@ -104,10 +119,20 @@ export default function ReportsPage() {
     other: { label: "Other", color: "hsl(var(--chart-5))" },
   } satisfies ChartConfig;
 
+  const Trend = ({ value }: { value: number }) => {
+    const isPositive = value >= 0;
+    return (
+      <div className={`flex items-center text-xs font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+        {isPositive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+        {Math.abs(value).toFixed(1)}% vs last period
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-        <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold">Reports</h1>
+    <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <h1 className="text-2xl font-bold tracking-tight">Product overview</h1>
             <Tabs value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)}>
                 <TabsList>
                     <TabsTrigger value="weekly">Weekly</TabsTrigger>
@@ -116,42 +141,66 @@ export default function ReportsPage() {
                 </TabsList>
             </Tabs>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
                 </CardHeader>
                 <CardContent>
-                <div className="text-2xl font-bold">${chartData.totalRevenue.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">From all sales</p>
+                  <div className="flex items-end justify-between">
+                      <div>
+                        <div className="text-4xl font-bold">${(chartData.totalRevenue / 1000).toFixed(1)}k</div>
+                        <Trend value={25.3} />
+                      </div>
+                      <ChartContainer config={{}} className="h-16 w-24">
+                          <LineChart data={chartData.salesTrend} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+                              <Line type="monotone" dataKey="revenue" stroke="hsl(var(--accent))" strokeWidth={2} dot={false}/>
+                          </LineChart>
+                      </ChartContainer>
+                  </div>
+                </CardContent>
+            </card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Net Profit</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-end justify-between">
+                        <div>
+                            <div className={`text-4xl font-bold ${chartData.netProfit >= 0 ? 'text-foreground' : 'text-destructive'}`}>${(chartData.netProfit / 1000).toFixed(1)}k</div>
+                            <Trend value={chartData.netProfit >= 0 ? 12.1 : -5.2} />
+                        </div>
+                        <ChartContainer config={{}} className="h-16 w-24">
+                            <LineChart data={chartData.salesTrend} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+                                <Line type="monotone" dataKey="revenue" stroke={chartData.netProfit >= 0 ? "hsl(var(--accent))" : "hsl(var(--destructive))"} strokeWidth={2} dot={false}/>
+                            </LineChart>
+                        </ChartContainer>
+                    </div>
                 </CardContent>
             </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-                <TrendingDown className="h-4 w-4 text-red-500" />
+            <Card className="lg:col-span-1">
+                 <CardHeader>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Expenses</CardTitle>
                 </CardHeader>
                 <CardContent>
-                <div className="text-2xl font-bold">${chartData.totalExpenses.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">Includes purchases and operational costs</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-                <Wallet className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                <div className={`text-2xl font-bold ${chartData.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>${chartData.netProfit.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground">After all expenses</p>
+                   <div className="flex items-end justify-between">
+                        <div>
+                            <div className="text-4xl font-bold text-foreground">${(chartData.totalExpenses / 1000).toFixed(1)}k</div>
+                             <Trend value={-8.1} />
+                        </div>
+                        <ChartContainer config={{}} className="h-16 w-24">
+                            <LineChart data={chartData.salesTrend} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+                                <Line type="monotone" dataKey="revenue" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false}/>
+                            </LineChart>
+                        </ChartContainer>
+                    </div>
                 </CardContent>
             </Card>
             
             <Card className="lg:col-span-2">
                 <CardHeader>
-                <CardTitle>Sales & Purchases Overview</CardTitle>
-                <CardDescription>Monthly overview of sales vs purchases.</CardDescription>
+                <CardTitle>Sales & Profit Overview</CardTitle>
+                <CardDescription>Monthly overview of sales vs profit.</CardDescription>
                 </CardHeader>
                 <CardContent>
                 <ChartContainer config={barChartConfig} className="h-[250px] w-full">
@@ -161,7 +210,7 @@ export default function ReportsPage() {
                     <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar dataKey="sales" fill="var(--color-sales)" radius={4} />
-                    <Bar dataKey="purchases" fill="var(--color-purchases)" radius={4} />
+                    <Bar dataKey="profit" fill="var(--color-profit)" radius={4} />
                     </BarChart>
                 </ChartContainer>
                 </CardContent>

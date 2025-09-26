@@ -5,7 +5,6 @@ import {
   DollarSign,
   LogOut,
 } from 'lucide-react';
-import Link from 'next/link';
 
 import { DeskVaultIcon } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -15,12 +14,12 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarProvider,
   SidebarFooter,
+  SidebarProvider,
 } from '@/components/ui/sidebar';
 import { NavLink } from '@/components/nav-link';
 import { DataProvider } from '@/context/data-context';
+import { Separator } from '@/components/ui/separator';
 
 export default function AppLayout({
   children,
@@ -33,9 +32,9 @@ export default function AppLayout({
         <div className="flex min-h-screen w-full">
           <Sidebar>
             <SidebarHeader>
-              <div className="flex items-center gap-3">
-                <DeskVaultIcon className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-headline font-semibold text-foreground">
+              <div className="flex items-center gap-3 p-2">
+                <DeskVaultIcon className="h-8 w-8 text-foreground" />
+                <h1 className="text-xl font-semibold text-foreground">
                   DeskVault
                 </h1>
               </div>
@@ -69,7 +68,8 @@ export default function AppLayout({
               </SidebarMenu>
             </SidebarContent>
             <SidebarFooter>
-              <Button variant="outline" className="w-full justify-start">
+                <Separator className='mb-2' />
+              <Button variant="ghost" className="w-full justify-start">
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
               </Button>
