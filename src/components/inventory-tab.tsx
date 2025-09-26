@@ -7,7 +7,7 @@ import { z } from "zod";
 import { PlusCircle, Package, Search, User, Building, Phone, MoreHorizontal } from "lucide-react";
 import { format } from 'date-fns';
 
-import { products as initialProducts, transactions as initialTransactions, partners } from "@/lib/data";
+import { products as initialProducts, transactions as initialTransactions, partners as initialPartners } from "@/lib/data";
 import type { Product, Transaction, Partner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +39,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -90,21 +92,34 @@ const productSchema = z.object({
     path: ["stock"],
 });
 
+const saleSchema = z.object({
+  buyerName: z.string().min(1, "Buyer name is required."),
+  buyerPhone: z.string().min(1, "Buyer phone is required."),
+  sellingPrice: z.coerce.number().min(0, "Selling price must be positive."),
+});
+
 
 type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner };
 
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [partners, setPartners] = useState<Partner[]>(initialPartners);
+
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [isSaleDialogOpen, setIsSaleDialogOpen] = useState(false);
+
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [sellingProduct, setSellingProduct] = useState<Product | null>(null);
+
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
-  const form = useForm<z.infer<typeof productSchema>>({
+  const productForm = useForm<z.infer<typeof productSchema>>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       type: "sku",
@@ -116,14 +131,23 @@ export function InventoryTab() {
       lentTo: "",
     },
   });
+
+  const saleForm = useForm<z.infer<typeof saleSchema>>({
+    resolver: zodResolver(saleSchema),
+    defaultValues: {
+        buyerName: "",
+        buyerPhone: "",
+        sellingPrice: 0,
+    }
+  });
   
-  const productType = form.watch("type");
+  const productType = productForm.watch("type");
 
   useEffect(() => {
     if (editingProduct) {
       const activeTransaction = transactions.find(t => t.productId === editingProduct.id && t.type === 'lend-out');
       
-      form.reset({
+      productForm.reset({
         type: editingProduct.type,
         name: editingProduct.name,
         category: editingProduct.category,
@@ -133,7 +157,7 @@ export function InventoryTab() {
         lentTo: activeTransaction?.type === 'lend-out' ? activeTransaction.party : "",
       });
     } else {
-      form.reset({
+      productForm.reset({
         type: "sku",
         name: "",
         category: "",
@@ -143,22 +167,29 @@ export function InventoryTab() {
         lentTo: "",
       });
     }
-  }, [editingProduct, form, transactions]);
+  }, [editingProduct, productForm, transactions]);
+
+  useEffect(() => {
+    if (sellingProduct) {
+        saleForm.reset({
+            sellingPrice: sellingProduct.price,
+            buyerName: "",
+            buyerPhone: "",
+        });
+    }
+  }, [sellingProduct, saleForm]);
   
   useEffect(() => {
     if (productType === "individual" && !editingProduct) {
-      form.setValue("stock", 1);
+      productForm.setValue("stock", 1);
     } else if (productType === "sku" && !editingProduct) {
-        if (form.getValues("stock") === 1) {
-            form.setValue("stock", 0);
+        if (productForm.getValues("stock") === 1) {
+            productForm.setValue("stock", 0);
         }
     }
-  }, [productType, form, editingProduct]);
+  }, [productType, productForm, editingProduct]);
 
  const filteredProducts = useMemo((): EnrichedProduct[] => {
-    const transactionMap = new Map<string, Transaction>();
-    transactions.forEach(t => transactionMap.set(t.productId, t));
-    
     const partnerMap = new Map<string, Partner>();
     partners.forEach(p => partnerMap.set(p.name, p));
 
@@ -200,18 +231,24 @@ export function InventoryTab() {
     }
 
     return enriched.filter(product =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.imei?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [activeTab, searchTerm, products, transactions]);
+  }, [activeTab, searchTerm, products, transactions, partners]);
   
   const handleAddNew = () => {
     setEditingProduct(null);
-    setIsDialogOpen(true);
+    setIsProductDialogOpen(true);
   };
   
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
-    setIsDialogOpen(true);
+    setIsProductDialogOpen(true);
+  };
+
+  const handleSell = (product: Product) => {
+    setSellingProduct(product);
+    setIsSaleDialogOpen(true);
   };
 
   const handleDelete = (product: Product) => {
@@ -239,7 +276,7 @@ export function InventoryTab() {
     });
   };
 
-  function onSubmit(values: z.infer<typeof productSchema>) {
+  function onProductSubmit(values: z.infer<typeof productSchema>) {
     const isNewProduct = !editingProduct;
     let productId = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
     
@@ -287,8 +324,51 @@ export function InventoryTab() {
         toast({ title: "Product Lent", description: `Logged lend-out for ${values.name} to ${values.lentTo}.` });
     }
 
-    setIsDialogOpen(false);
+    setIsProductDialogOpen(false);
     setEditingProduct(null);
+  }
+
+  function onSaleSubmit(values: z.infer<typeof saleSchema>) {
+    if (!sellingProduct) return;
+
+    let partner = partners.find(p => p.name === values.buyerName && p.phone === values.buyerPhone);
+    if (!partner) {
+        const newPartner: Partner = {
+            id: `partner-${Date.now()}`,
+            name: values.buyerName,
+            phone: values.buyerPhone,
+            type: 'individual',
+        };
+        setPartners(prev => [newPartner, ...prev]);
+        partner = newPartner;
+    }
+
+    const saleTransaction: Transaction = {
+        id: `txn-${Date.now()}`,
+        productId: sellingProduct.id,
+        type: 'sale',
+        quantity: 1,
+        price: values.sellingPrice,
+        totalAmount: values.sellingPrice,
+        date: new Date().toISOString(),
+        party: partner.name,
+    };
+
+    setTransactions(prev => [saleTransaction, ...prev]);
+
+    setProducts(prev => prev.map(p => 
+        p.id === sellingProduct.id 
+        ? { ...p, stock: p.stock - 1 }
+        : p
+    ));
+
+    toast({
+        title: "Product Sold!",
+        description: `${sellingProduct.name} sold to ${partner.name}.`,
+    });
+    
+    setIsSaleDialogOpen(false);
+    setSellingProduct(null);
   }
 
   const getStockStatus = (stock: number) => {
@@ -395,6 +475,9 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleSell(product)}>Sell</DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleEdit(product)}>Edit</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDelete(product)} className="text-destructive focus:text-destructive">Delete</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -462,7 +545,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableHead>Partner</TableHead>
           <TableHead>Date</TableHead>
           <TableHead>IMEI</TableHead>
-          <TableHead><span className="sr-only">Actions</span></TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -492,7 +575,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                    placeholder="Search by IMEI..."
+                    placeholder="Search by Name or IMEI..."
                     className="pl-10"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -566,7 +649,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
       </TabsContent>
     </Tabs>
 
-      <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { setIsDialogOpen(isOpen); if (!isOpen) setEditingProduct(null); }}>
+      <Dialog open={isProductDialogOpen} onOpenChange={(isOpen) => { setIsProductDialogOpen(isOpen); if (!isOpen) setEditingProduct(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
@@ -574,10 +657,10 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
               {editingProduct ? 'Update the details of your product.' : 'Enter the details of the new product to add to your inventory.'}
             </DialogDescription>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <Form {...productForm}>
+            <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4">
               <FormField
-                control={form.control}
+                control={productForm.control}
                 name="type"
                 render={({ field }) => (
                   <FormItem className="space-y-3">
@@ -614,7 +697,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  control={form.control}
+                  control={productForm.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
@@ -627,7 +710,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={productForm.control}
                   name="category"
                   render={({ field }) => (
                     <FormItem>
@@ -658,7 +741,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
               </div>
 
               <FormField
-                control={form.control}
+                control={productForm.control}
                 name="imei"
                 render={({ field }) => (
                   <FormItem>
@@ -673,7 +756,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
 
               <div className="grid grid-cols-2 gap-4">
                  <FormField
-                  control={form.control}
+                  control={productForm.control}
                   name="price"
                   render={({ field }) => (
                     <FormItem>
@@ -686,7 +769,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={productForm.control}
                   name="stock"
                   render={({ field }) => (
                     <FormItem>
@@ -703,7 +786,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
               {productType === 'individual' && (
                 <div className="grid grid-cols-1 gap-4">
                     <FormField
-                        control={form.control}
+                        control={productForm.control}
                         name="lentTo"
                         render={({ field }) => (
                             <FormItem>
@@ -738,6 +821,68 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
         </DialogContent>
       </Dialog>
       
+      <Dialog open={isSaleDialogOpen} onOpenChange={(isOpen) => { setIsSaleDialogOpen(isOpen); if (!isOpen) setSellingProduct(null); }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Sell Product</DialogTitle>
+                <DialogDescription>
+                    Record a sale for "{sellingProduct?.name}".
+                </DialogDescription>
+            </DialogHeader>
+            <Form {...saleForm}>
+                <form onSubmit={saleForm.handleSubmit(onSaleSubmit)} className="space-y-4">
+                    <FormField
+                        control={saleForm.control}
+                        name="buyerName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Buyer Name</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g., John Doe" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={saleForm.control}
+                        name="buyerPhone"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Buyer Phone</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g., 555-123-4567" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={saleForm.control}
+                        name="sellingPrice"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Selling Price</FormLabel>
+                                <FormControl>
+                                    <Input type="number" step="0.01" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <DialogFooter>
+                        <DialogClose asChild>
+                        <Button type="button" variant="secondary">
+                            Cancel
+                        </Button>
+                        </DialogClose>
+                        <Button type="submit">Confirm Sale</Button>
+                    </DialogFooter>
+                </form>
+            </Form>
+          </DialogContent>
+      </Dialog>
+
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

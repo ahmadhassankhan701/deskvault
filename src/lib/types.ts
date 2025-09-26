@@ -1,4 +1,4 @@
-export type TransactionType = "purchase" | "sale" | "lend-out" | "lend-return";
+export type TransactionType = "purchase" | "sale" | "lend-out";
 
 export type Product = {
   id: string;
@@ -7,7 +7,7 @@ export type Product = {
   category: string;
   stock: number;
   price: number;
-  imei: string;
+  imei?: string;
 };
 
 export type Partner = {
