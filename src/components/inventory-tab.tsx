@@ -238,10 +238,11 @@ export function InventoryTab() {
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
+                if (!product) return null;
                 const partner = partnerMap.get(t.party);
-                return { ...t, product: product!, partner };
+                return { ...t, product, partner };
             })
-            .filter(t => t.product);
+            .filter((t): t is EnrichedTransaction => t !== null);
 
         if (searchTerm) {
             soldTransactions = soldTransactions.filter(t =>
@@ -964,5 +965,3 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </>
   );
 }
-
-    
