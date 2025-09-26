@@ -245,7 +245,7 @@ export function InventoryTab() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Product Name</FormLabel>
+                      <FormLabel>{productType === 'sku' ? 'Title of SKU' : 'Product Name'}</FormLabel>
                       <FormControl>
                         <Input placeholder="e.g., Wireless Mouse" {...field} />
                       </FormControl>
@@ -292,7 +292,7 @@ export function InventoryTab() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center">
-                      <ScanBarcode className="mr-2 h-4 w-4" /> Barcode
+                      <ScanBarcode className="mr-2 h-4 w-4" /> IMEI / Barcode
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="Enter or scan barcode" {...field} disabled={productType === 'individual'} />
