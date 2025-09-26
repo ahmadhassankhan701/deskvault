@@ -225,18 +225,12 @@ export function InventoryTab() {
 
     if (activeTab === 'sold') {
         let soldTransactions = transactions
-            .filter(t => t.type === 'sale')
+            .filter(t => t.type === 'sale' && productMap.has(t.productId))
             .map(t => {
-                const product = productMap.get(t.productId);
-                // Important: if product is not found, we don't include it.
-                if (!product) {
-                    return null;
-                }
+                const product = productMap.get(t.productId)!;
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
-            })
-            // This filter is crucial to remove the nulls.
-            .filter((t): t is EnrichedTransaction => t !== null);
+            });
 
         if (searchTerm) {
             soldTransactions = soldTransactions.filter(t =>
