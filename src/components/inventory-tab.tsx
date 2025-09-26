@@ -5,9 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { PlusCircle, Package, Search } from "lucide-react";
+import { format } from 'date-fns';
 
-import { products as initialProducts, transactions } from "@/lib/data";
-import type { Product } from "@/lib/types";
+import { products as initialProducts, transactions, partners } from "@/lib/data";
+import type { Product, Transaction, Partner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -72,6 +73,8 @@ const productSchema = z.object({
 });
 
 
+type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner };
+
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -103,35 +106,45 @@ export function InventoryTab() {
     }
   }, [productType, form]);
 
-  const filteredProducts = useMemo(() => {
-    let tabProducts: Product[] = [];
-    const transactionProductIds = new Map<string, string>();
-    transactions.forEach(t => transactionProductIds.set(t.productId, t.type));
+ const filteredProducts = useMemo((): EnrichedProduct[] => {
+    const transactionMap = new Map<string, Transaction>();
+    transactions.forEach(t => transactionMap.set(t.productId, t));
+    
+    const partnerMap = new Map<string, Partner>();
+    partners.forEach(p => partnerMap.set(p.name, p));
 
-    switch (activeTab) {
-      case "sold":
-        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'sale');
-        break;
-      case "borrowed":
-        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'borrow-in');
-        break;
-      case "lent":
-        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'lend-out');
-        break;
-      case "active":
-      default:
-        tabProducts = products.filter(p => p.stock > 0);
-        break;
+    let tabProducts: Product[] = [];
+
+    if (activeTab === 'active') {
+        tabProducts = initialProducts.filter(p => p.stock > 0 && !transactionMap.has(p.id));
+    } else {
+        const relevantTxnTypes: string[] = {
+            'sold': ['sale'],
+            'borrowed': ['borrow-in'],
+            'lent': ['lend-out'],
+        }[activeTab] || [];
+        
+        const productIdsInTransactions = transactions
+            .filter(t => relevantTxnTypes.includes(t.type))
+            .map(t => t.productId);
+            
+        tabProducts = initialProducts.filter(p => productIdsInTransactions.includes(p.id));
     }
+
+    let enriched = tabProducts.map(p => {
+        const transaction = transactionMap.get(p.id);
+        const partner = transaction ? partnerMap.get(transaction.party) : undefined;
+        return { ...p, transaction, partner };
+    });
 
     if (!searchTerm) {
-      return tabProducts;
+      return enriched;
     }
 
-    return tabProducts.filter(product =>
+    return enriched.filter(product =>
       product.imei.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [products, activeTab, searchTerm]);
+  }, [activeTab, searchTerm]);
 
 
   function onSubmit(values: z.infer<typeof productSchema>) {
@@ -164,6 +177,99 @@ export function InventoryTab() {
     return <Badge variant="secondary">In Stock</Badge>;
   };
 
+  const renderActiveTable = () => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Product Name</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Category</TableHead>
+          <TableHead>Stock</TableHead>
+          <TableHead>IMEI</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead className="text-right">Price</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredProducts.map((product) => (
+          <TableRow key={product.id}>
+            <TableCell className="font-medium">{product.name}</TableCell>
+            <TableCell>
+              <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
+                <Package className="h-3 w-3" />
+                {product.type}
+              </Badge>
+            </TableCell>
+            <TableCell>{product.category}</TableCell>
+            <TableCell>{product.stock}</TableCell>
+            <TableCell className="font-mono text-xs">{product.imei}</TableCell>
+            <TableCell>{getStockStatus(product.stock)}</TableCell>
+            <TableCell className="text-right">
+              ${product.price.toFixed(2)}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+  const renderSoldTable = () => (
+     <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Product Name</TableHead>
+          <TableHead>Buyer Name</TableHead>
+          <TableHead>Phone</TableHead>
+          <TableHead>Selling Date</TableHead>
+          <TableHead>IMEI</TableHead>
+          <TableHead className="text-right">Sold Price</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredProducts.map(({id, name, transaction, partner, imei}) => (
+          <TableRow key={id}>
+            <TableCell className="font-medium">{name}</TableCell>
+            <TableCell>{partner?.name ?? 'N/A'}</TableCell>
+            <TableCell>{partner?.phone ?? 'N/A'}</TableCell>
+            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
+            <TableCell className="font-mono text-xs">{imei}</TableCell>
+            <TableCell className="text-right">
+              ${transaction?.totalAmount.toFixed(2) ?? '0.00'}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+  const renderLentBorrowedTable = () => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Product Name</TableHead>
+          <TableHead>Partner Name</TableHead>
+          <TableHead>Phone</TableHead>
+          <TableHead>Shop</TableHead>
+          <TableHead>Date</TableHead>
+          <TableHead>IMEI</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {filteredProducts.map(({id, name, transaction, partner, imei}) => (
+          <TableRow key={id}>
+            <TableCell className="font-medium">{name}</TableCell>
+            <TableCell>{partner?.name ?? 'N/A'}</TableCell>
+            <TableCell>{partner?.phone ?? 'N/A'}</TableCell>
+            <TableCell>{partner?.shopName ?? 'N/A'}</TableCell>
+            <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
+            <TableCell className="font-mono text-xs">{imei}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+
   return (
     <>
     <div className="flex items-center justify-between mb-4">
@@ -191,54 +297,76 @@ export function InventoryTab() {
         <TabsTrigger value="borrowed">Borrowed</TabsTrigger>
         <TabsTrigger value="lent">Lent</TabsTrigger>
       </TabsList>
-      <TabsContent value={activeTab}>
+      <TabsContent value="active">
         <Card>
           <CardHeader>
-              <CardTitle>Products</CardTitle>
+              <CardTitle>Active Products</CardTitle>
               <CardDescription>
                 Manage your products and their stock levels.
               </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>IMEI</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>
-                      <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
-                        <Package className="h-3 w-3" />
-                        {product.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{product.category}</TableCell>
-                    <TableCell>{product.stock}</TableCell>
-                    <TableCell className="font-mono text-xs">{product.imei}</TableCell>
-                    <TableCell>{getStockStatus(product.stock)}</TableCell>
-                    <TableCell className="text-right">
-                      ${product.price.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-             {filteredProducts.length === 0 && (
+            {renderActiveTable()}
+            {filteredProducts.length === 0 && (
               <div className="text-center text-muted-foreground py-8">
-                No products found.
+                No active products found.
               </div>
             )}
           </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="sold">
+        <Card>
+            <CardHeader>
+                <CardTitle>Sold Products</CardTitle>
+                <CardDescription>
+                    A log of all products that have been sold.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {renderSoldTable()}
+                 {filteredProducts.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                        No sold products found.
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="borrowed">
+        <Card>
+            <CardHeader>
+                <CardTitle>Borrowed Products</CardTitle>
+                <CardDescription>
+                    Products you have borrowed from partners.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {renderLentBorrowedTable()}
+                {filteredProducts.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                        No borrowed products found.
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="lent">
+        <Card>
+            <CardHeader>
+                <CardTitle>Lent Products</CardTitle>
+                <CardDescription>
+                    Products you have lent out to partners.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {renderLentBorrowedTable()}
+                {filteredProducts.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                        No lent products found.
+                    </div>
+                )}
+            </CardContent>
         </Card>
       </TabsContent>
     </Tabs>
