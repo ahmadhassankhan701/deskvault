@@ -2,7 +2,7 @@ export type TransactionType = "purchase" | "sale" | "borrow-in" | "lend-out" | "
 
 export type Product = {
   id: string;
-  type: 'individual' | 'group';
+  type: 'individual' | 'sku';
   name: string;
   category: string;
   stock: number;

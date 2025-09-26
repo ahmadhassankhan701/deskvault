@@ -47,7 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const productSchema = z.object({
-  type: z.enum(["individual", "group"]),
+  type: z.enum(["individual", "sku"]),
   name: z.string().min(1, "Product name is required."),
   category: z.string().min(1, "Category is required."),
   price: z.coerce.number().min(0.01, "Price must be positive."),
@@ -73,7 +73,7 @@ export function InventoryTab() {
   const form = useForm<z.infer<typeof productSchema>>({
     resolver: zodResolver(productSchema),
     defaultValues: {
-      type: "group",
+      type: "sku",
       name: "",
       category: "",
       stock: 0,
@@ -92,6 +92,11 @@ export function InventoryTab() {
       if (imei) {
         form.setValue("barcode", imei);
       }
+    } else {
+        const barcode = form.getValues("barcode");
+        if (barcode === form.getValues("imei")) {
+             form.setValue("barcode", "");
+        }
     }
   }, [productType, form]);
 
@@ -171,7 +176,7 @@ export function InventoryTab() {
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell>
                   <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
-                    {product.type === 'individual' ? <Package className="h-3 w-3" /> : <Package className="h-3 w-3" />}
+                    <Package className="h-3 w-3" />
                     {product.type}
                   </Badge>
                 </TableCell>
@@ -213,10 +218,10 @@ export function InventoryTab() {
                       >
                         <FormItem className="flex items-center space-x-2 space-y-0">
                           <FormControl>
-                            <RadioGroupItem value="group" />
+                            <RadioGroupItem value="sku" />
                           </FormControl>
                           <FormLabel className="font-normal">
-                            Group / Category
+                            SKU
                           </FormLabel>
                         </FormItem>
                         <FormItem className="flex items-center space-x-2 space-y-0">
