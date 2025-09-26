@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package, Barcode } from "lucide-react";
+import { PlusCircle, Package } from "lucide-react";
 
 import { products as initialProducts } from "@/lib/data";
 import type { Product } from "@/lib/types";
@@ -52,7 +52,7 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required."),
   price: z.coerce.number().min(0, "Price cannot be negative."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
-  barcode: z.string().min(1, "Barcode or IMEI is required."),
+  imei: z.string().min(1, "IMEI is required."),
 }).refine(data => {
     if (data.type === 'individual') {
         return data.stock === 1;
@@ -77,7 +77,7 @@ export function InventoryTab() {
       category: "",
       stock: 0,
       price: 0,
-      barcode: "",
+      imei: "",
     },
   });
   
@@ -87,7 +87,6 @@ export function InventoryTab() {
     if (productType === "individual") {
       form.setValue("stock", 1);
     } else {
-      // Reset stock if switching back to SKU from individual if it was 1
       if (form.getValues("stock") === 1) {
           form.setValue("stock", 0);
       }
@@ -97,6 +96,7 @@ export function InventoryTab() {
   function onSubmit(values: z.infer<typeof productSchema>) {
     const newProduct: Product = {
       id: `prod-${Date.now()}`,
+      barcode: values.imei, // Using imei as barcode
       ...values,
       stock: values.type === 'individual' ? 1 : values.stock,
     };
@@ -147,7 +147,7 @@ export function InventoryTab() {
               <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead>Barcode / IMEI</TableHead>
+              <TableHead>IMEI</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Price</TableHead>
             </TableRow>
@@ -251,14 +251,12 @@ export function InventoryTab() {
 
               <FormField
                 control={form.control}
-                name="barcode"
+                name="imei"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center">
-                      <Barcode className="mr-2 h-4 w-4" /> Barcode
-                    </FormLabel>
+                    <FormLabel>IMEI</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter unique barcode or IMEI" {...field} />
+                      <Input placeholder="Enter IMEI" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
