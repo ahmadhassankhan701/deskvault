@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return new Promise<void>((resolve, reject) => {
         // Mock API call
         setTimeout(() => {
-            if (email === "admin@deskvault.com" && pass === "password123") {
+            if (email === "johndoe@gmail.com" && pass === "johndoe12") {
                 localStorage.setItem("isAuthenticated", "true");
                 setIsAuthenticated(true);
                 resolve();
