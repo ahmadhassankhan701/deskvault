@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package, Search } from "lucide-react";
+import { PlusCircle, Package, Search, User, Building, Phone } from "lucide-react";
 import { format } from 'date-fns';
 
 import { products as initialProducts, transactions, partners } from "@/lib/data";
@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 
 const productSchema = z.object({
   type: z.enum(["individual", "sku"]),
@@ -116,7 +117,7 @@ export function InventoryTab() {
     let tabProducts: Product[] = [];
 
     if (activeTab === 'active') {
-        tabProducts = initialProducts.filter(p => p.stock > 0 && !transactionMap.has(p.id));
+        tabProducts = initialProducts.filter(p => p.stock > 0 && !transactions.some(t => t.productId === p.id && (t.type === 'sale' || t.type === 'lend-out')));
     } else {
         const relevantTxnTypes: string[] = {
             'sold': ['sale'],
@@ -132,7 +133,11 @@ export function InventoryTab() {
     }
 
     let enriched = tabProducts.map(p => {
-        const transaction = transactionMap.get(p.id);
+        const transaction = transactions.find(t => t.productId === p.id && {
+            'sold': t.type === 'sale',
+            'borrowed': t.type === 'borrow-in',
+            'lent': t.type === 'lend-out',
+        }[activeTab]);
         const partner = transaction ? partnerMap.get(transaction.party) : undefined;
         return { ...p, transaction, partner };
     });
@@ -176,6 +181,34 @@ export function InventoryTab() {
       );
     return <Badge variant="secondary">In Stock</Badge>;
   };
+  
+  const PartnerCell = ({ partner }: { partner?: Partner }) => {
+    if (!partner) return <TableCell>N/A</TableCell>;
+
+    const initials = partner.name.split(' ').map(n => n[0]).join('');
+
+    return (
+        <TableCell>
+            <div className="flex items-center gap-3">
+                <Avatar>
+                    <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col">
+                    <span className="font-medium">{partner.name}</span>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        {partner.type === 'shop' ? <Building className="h-3 w-3"/> : <User className="h-3 w-3"/>}
+                        <span>{partner.shopName ?? 'Individual'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-3 w-3"/>
+                        <span>{partner.phone}</span>
+                    </div>
+                </div>
+            </div>
+        </TableCell>
+    );
+};
+
 
   const renderActiveTable = () => (
     <Table>
@@ -218,8 +251,7 @@ export function InventoryTab() {
       <TableHeader>
         <TableRow>
           <TableHead>Product Name</TableHead>
-          <TableHead>Buyer Name</TableHead>
-          <TableHead>Phone</TableHead>
+          <TableHead>Sold To</TableHead>
           <TableHead>Selling Date</TableHead>
           <TableHead>IMEI</TableHead>
           <TableHead className="text-right">Sold Price</TableHead>
@@ -229,8 +261,7 @@ export function InventoryTab() {
         {filteredProducts.map(({id, name, transaction, partner, imei}) => (
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
-            <TableCell>{partner?.name ?? 'N/A'}</TableCell>
-            <TableCell>{partner?.phone ?? 'N/A'}</TableCell>
+            <PartnerCell partner={partner} />
             <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
             <TableCell className="text-right">
@@ -247,9 +278,7 @@ export function InventoryTab() {
       <TableHeader>
         <TableRow>
           <TableHead>Product Name</TableHead>
-          <TableHead>Partner Name</TableHead>
-          <TableHead>Phone</TableHead>
-          <TableHead>Shop</TableHead>
+          <TableHead>Partner</TableHead>
           <TableHead>Date</TableHead>
           <TableHead>IMEI</TableHead>
         </TableRow>
@@ -258,9 +287,7 @@ export function InventoryTab() {
         {filteredProducts.map(({id, name, transaction, partner, imei}) => (
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
-            <TableCell>{partner?.name ?? 'N/A'}</TableCell>
-            <TableCell>{partner?.phone ?? 'N/A'}</TableCell>
-            <TableCell>{partner?.shopName ?? 'N/A'}</TableCell>
+            <PartnerCell partner={partner} />
             <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
           </TableRow>
@@ -518,3 +545,5 @@ export function InventoryTab() {
     </>
   );
 }
+
+    

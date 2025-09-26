@@ -6,8 +6,12 @@ export const products: Product[] = [
   { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", imei: "123456789012345", barcode: "123456789012345" },
   { id: "prod-3", type: "sku", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals", imei: "8901234567891", barcode: "8901234567891" },
   { id: "prod-4", type: "sku", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture", imei: "8901234567892", barcode: "8901234567892" },
-  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio", imei: "543210987654321", barcode: "543210987654321"},
+  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 1, price: 199.99, category: "Audio", imei: "543210987654321", barcode: "543210987654321"},
   { id: "prod-6", type: "sku", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", imei: "8901234567893", barcode: "8901234567893" },
+  { id: "prod-7", type: "individual", name: "Macbook Pro 14 inch", stock: 1, price: 2499.00, category: "Laptops", imei: "112233445566778", barcode: "112233445566778"},
+  { id: "prod-8", type: "individual", name: "iPhone 15 Pro", stock: 1, price: 999.00, category: "Mobiles", imei: "887766554433221", barcode: "887766554433221"},
+  { id: "prod-9", type: "individual", name: "iPad Air", stock: 1, price: 799.00, category: "Tablets", imei: "123123123123123", barcode: "123123123123123"},
+  { id: "prod-10", type: "individual", name: "Galaxy S24 Ultra", stock: 1, price: 1299.00, category: "Mobiles", imei: "321321321321321", barcode: "321321321321321"},
 ];
 
 export const partners: Partner[] = [
@@ -16,6 +20,7 @@ export const partners: Partner[] = [
     { id: "partner-3", type: "shop", name: "Design Co.", phone: "555-0103", shopName: "Design Co." },
     { id: "partner-4", type: "individual", name: "Freelancer Bob", phone: "555-0104" },
     { id: "partner-5", type: "shop", name: "Tech Distributors", phone: "555-0105", shopName: "Tech Distributors" },
+    { id: "partner-6", type: "individual", name: "Alice", phone: "555-0106" },
 ];
 
 export const transactions: Transaction[] = [
@@ -49,11 +54,11 @@ export const transactions: Transaction[] = [
     date: subDays(new Date(), 5).toISOString(),
     party: "Design Co.",
   },
-   {
+  {
     id: "txn-4",
-    productId: "prod-3",
+    productId: "prod-5",
     type: "lend-out",
-    quantity: 5,
+    quantity: 1,
     price: 0,
     totalAmount: 0,
     date: subDays(new Date(), 10).toISOString(),
@@ -81,13 +86,43 @@ export const transactions: Transaction[] = [
   },
    {
     id: "txn-7",
-    productId: "prod-2",
+    productId: "prod-7",
     type: "sale",
-    quantity: 5,
-    price: 499.99,
-    totalAmount: 2499.95,
+    quantity: 1,
+    price: 2499.00,
+    totalAmount: 2499.00,
     date: subMonths(new Date(), 1).toISOString(),
     party: "Creative Agency",
+  },
+  {
+    id: "txn-8",
+    productId: "prod-8",
+    type: "borrow-in",
+    quantity: 1,
+    price: 0,
+    totalAmount: 0,
+    date: subDays(new Date(), 7).toISOString(),
+    party: "Innovate LLC",
+  },
+  {
+    id: "txn-9",
+    productId: "prod-9",
+    type: "lend-out",
+    quantity: 1,
+    price: 0,
+    totalAmount: 0,
+    date: subDays(new Date(), 3).toISOString(),
+    party: "Design Co.",
+  },
+  {
+    id: "txn-10",
+    productId: "prod-10",
+    type: "sale",
+    quantity: 1,
+    price: 1350,
+    totalAmount: 1350.00,
+    date: subDays(new Date(), 1).toISOString(),
+    party: "Alice",
   },
 ];
 
@@ -128,3 +163,5 @@ export const expenses: Expense[] = [
         amount: 2500.00
     },
 ];
+
+    
