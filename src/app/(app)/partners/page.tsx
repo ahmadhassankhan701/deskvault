@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,7 +78,7 @@ const partnerSchema = z.object({
 });
 
 
-export function PartnersTab() {
+export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>(initialPartners);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
@@ -170,19 +170,20 @@ export function PartnersTab() {
   }
 
   return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle>Partners</CardTitle>
-            <CardDescription>
-              Manage your suppliers, customers, and other partners.
-            </CardDescription>
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Partners</h1>
           <Button onClick={handleAddNew} size="sm">
             <PlusCircle className="mr-2" />
             Add Partner
           </Button>
+      </div>
+      <Card>
+        <CardHeader>
+            <CardTitle>Partners List</CardTitle>
+            <CardDescription>
+              Manage your suppliers, customers, and other partners.
+            </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -345,6 +346,6 @@ export function PartnersTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

@@ -72,7 +72,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const productSchema = z.object({
   type: z.enum(["individual", "sku"]),
@@ -103,7 +103,7 @@ const saleSchema = z.object({
 type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner };
 type EnrichedTransaction = Transaction & { product: Product, partner?: Partner };
 
-export function InventoryTab() {
+export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [partners, setPartners] = useState<Partner[]>(initialPartners);
@@ -224,27 +224,27 @@ export function InventoryTab() {
     }
 
     if (activeTab === 'sold') {
-        let soldItems = transactions
+        const soldTransactions = transactions
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
-                if (!product) return null;
+                if (!product) return null; // Filter out transactions for deleted products
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null); 
+            .filter((t): t is EnrichedTransaction => t !== null);
 
         if (searchTerm) {
-            return soldItems.filter(t =>
+            return soldTransactions.filter(t =>
                 t.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (t.product.imei && t.product.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
-        return soldItems;
+        return soldTransactions;
     }
     
     if (activeTab === 'lent') {
-        let lentProducts: EnrichedProduct[] = transactions
+        const lentProducts: EnrichedProduct[] = transactions
             .filter(t => t.type === 'lend-out')
             .map(t => {
                 const product = productMap.get(t.productId);
@@ -255,7 +255,7 @@ export function InventoryTab() {
             .filter((p): p is EnrichedProduct => p !== null && productMap.has(p.id));
         
         if (searchTerm) {
-            lentProducts = lentProducts.filter(p =>
+            return lentProducts.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (p.imei && p.imei.toLowerCase().includes(searchTerm.toLowerCase()))
             );
@@ -288,12 +288,15 @@ export function InventoryTab() {
 
   const confirmDelete = () => {
     if (productToDelete) {
+      // Remove product
       setProducts(products.filter(p => p.id !== productToDelete.id));
-      // Also remove associated transactions
+      // Remove associated transactions
       setTransactions(transactions.filter(t => t.productId !== productToDelete.id));
+      
       toast({
         title: "Product Deleted",
-        description: `${productToDelete.name} has been removed.`,
+        description: `${productToDelete.name} and its transactions have been removed.`,
+        variant: "destructive",
       });
     }
     setIsDeleteAlertOpen(false);
