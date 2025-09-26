@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Package, ScanBarcode, Hash } from "lucide-react";
 
 import { products as initialProducts } from "@/lib/data";
 import type { Product } from "@/lib/types";
@@ -44,13 +44,26 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const productSchema = z.object({
+  type: z.enum(["individual", "group"]),
   name: z.string().min(1, "Product name is required."),
   category: z.string().min(1, "Category is required."),
-  stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
   price: z.coerce.number().min(0.01, "Price must be positive."),
+  stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
+  imei: z.string().optional(),
+  barcode: z.string().min(1, "Barcode is required."),
+}).refine(data => {
+    if (data.type === 'individual') {
+        return !!data.imei && data.imei.length > 0;
+    }
+    return true;
+}, {
+    message: "IMEI is required for individual products.",
+    path: ["imei"],
 });
+
 
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -60,17 +73,44 @@ export function InventoryTab() {
   const form = useForm<z.infer<typeof productSchema>>({
     resolver: zodResolver(productSchema),
     defaultValues: {
+      type: "group",
       name: "",
       category: "",
       stock: 0,
       price: 0,
+      imei: "",
+      barcode: "",
     },
   });
+  
+  const productType = form.watch("type");
+
+  useEffect(() => {
+    if (productType === "individual") {
+      form.setValue("stock", 1);
+      const imei = form.getValues("imei");
+      if (imei) {
+        form.setValue("barcode", imei);
+      }
+    }
+  }, [productType, form]);
+
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'imei' && value.type === 'individual') {
+        form.setValue('barcode', value.imei || '');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
 
   function onSubmit(values: z.infer<typeof productSchema>) {
     const newProduct: Product = {
       id: `prod-${Date.now()}`,
       ...values,
+      stock: values.type === 'individual' ? 1 : values.stock,
+      imei: values.type === 'individual' ? values.imei : undefined,
     };
     setProducts([newProduct, ...products]);
     toast({
@@ -116,8 +156,11 @@ export function InventoryTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Product Name</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Stock</TableHead>
+              <TableHead>IMEI</TableHead>
+              <TableHead>Barcode</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Price</TableHead>
             </TableRow>
@@ -126,8 +169,16 @@ export function InventoryTab() {
             {products.map((product) => (
               <TableRow key={product.id}>
                 <TableCell className="font-medium">{product.name}</TableCell>
+                <TableCell>
+                  <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
+                    {product.type === 'individual' ? <Package className="h-3 w-3" /> : <Package className="h-3 w-3" />}
+                    {product.type}
+                  </Badge>
+                </TableCell>
                 <TableCell>{product.category}</TableCell>
                 <TableCell>{product.stock}</TableCell>
+                <TableCell className="font-mono text-xs">{product.imei ?? 'N/A'}</TableCell>
+                <TableCell className="font-mono text-xs">{product.barcode}</TableCell>
                 <TableCell>{getStockStatus(product.stock)}</TableCell>
                 <TableCell className="text-right">
                   ${product.price.toFixed(2)}
@@ -139,7 +190,7 @@ export function InventoryTab() {
       </CardContent>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add New Product</DialogTitle>
             <DialogDescription>
@@ -150,39 +201,48 @@ export function InventoryTab() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="type"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Product Name</FormLabel>
+                  <FormItem className="space-y-3">
+                    <FormLabel>Product Type</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Wireless Mouse" {...field} />
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex items-center space-x-4"
+                      >
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="group" />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            Group / Category
+                          </FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="individual" />
+                          </FormControl>
+                          <FormLabel className="font-normal">
+                            Individual
+                          </FormLabel>
+                        </FormItem>
+                      </RadioGroup>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Electronics" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="stock"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Stock</FormLabel>
+                      <FormLabel>Product Name</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="100" {...field} />
+                        <Input placeholder="e.g., Wireless Mouse" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -190,12 +250,75 @@ export function InventoryTab() {
                 />
                 <FormField
                   control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Electronics" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {productType === 'individual' && (
+                <FormField
+                  control={form.control}
+                  name="imei"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center">
+                        <Hash className="mr-2 h-4 w-4" /> IMEI
+                      </FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter unique IMEI" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="barcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center">
+                      <ScanBarcode className="mr-2 h-4 w-4" /> Barcode
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter or scan barcode" {...field} disabled={productType === 'individual'} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                 <FormField
+                  control={form.control}
                   name="price"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Price</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="29.99" {...field} />
+                        <Input type="number" step="0.01" placeholder="29.99" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="stock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Stock</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="100" {...field} disabled={productType === 'individual'} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

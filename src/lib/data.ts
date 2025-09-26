@@ -2,12 +2,12 @@ import { subDays, subMonths } from "date-fns";
 import type { Product, Transaction, Expense, Partner } from "./types";
 
 export const products: Product[] = [
-  { id: "prod-1", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals" },
-  { id: "prod-2", name: "4K Ultra-Wide Monitor", stock: 25, price: 499.99, category: "Displays" },
-  { id: "prod-3", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals" },
-  { id: "prod-4", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture" },
-  { id: "prod-5", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio" },
-  { id: "prod-6", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories" },
+  { id: "prod-1", type: "group", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals", barcode: "8901234567890" },
+  { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", imei: "123456789012345", barcode: "123456789012345" },
+  { id: "prod-3", type: "group", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals", barcode: "8901234567891" },
+  { id: "prod-4", type: "group", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture", barcode: "8901234567892" },
+  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio", imei: "543210987654321", barcode: "543210987654321"},
+  { id: "prod-6", type: "group", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", barcode: "8901234567893" },
 ];
 
 export const partners: Partner[] = [

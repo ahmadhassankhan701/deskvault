@@ -2,10 +2,13 @@ export type TransactionType = "purchase" | "sale" | "borrow-in" | "lend-out" | "
 
 export type Product = {
   id: string;
+  type: 'individual' | 'group';
   name: string;
+  category: string;
   stock: number;
   price: number;
-  category: string;
+  imei?: string;
+  barcode: string;
 };
 
 export type Partner = {
