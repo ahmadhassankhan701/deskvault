@@ -222,13 +222,15 @@ export default function InventoryPage() {
     }
 
     if (activeTab === 'sold') {
-        const soldTransactions = transactions
+        let soldTransactions = transactions
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
                 const partner = partnerMap.get(t.party);
+                // Enrich the transaction with product and partner details
                 return { ...t, product, partner };
             })
+            // *** CRUCIAL FIX: Filter out any transactions where the product doesn't exist ***
             .filter((t): t is EnrichedTransaction => !!t.product);
 
         if (searchTerm) {
@@ -286,9 +288,9 @@ export default function InventoryPage() {
   const confirmDelete = () => {
     if (productToDelete) {
       // Remove product
-      setProducts(products.filter(p => p.id !== productToDelete.id));
+      setProducts(prevProducts => prevProducts.filter(p => p.id !== productToDelete.id));
       // Remove associated transactions
-      setTransactions(transactions.filter(t => t.productId !== productToDelete.id));
+      setTransactions(prevTransactions => prevTransactions.filter(t => t.productId !== productToDelete.id));
       
       toast({
         title: "Product Deleted",
@@ -537,7 +539,8 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
         {(filteredProducts as EnrichedTransaction[]).map((t) => {
             const salePrice = t.price ?? 0;
             const quantity = t.quantity ?? 1;
-            const purchasePrice = t.product.price;
+            // *** CRUCIAL FIX: Use optional chaining as a safeguard ***
+            const purchasePrice = t.product?.price || 0;
             const profit = (salePrice - purchasePrice) * quantity;
             
             return (
