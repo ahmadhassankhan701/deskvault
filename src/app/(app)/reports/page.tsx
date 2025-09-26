@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -128,11 +129,17 @@ export default function ReportsPage() {
       </div>
     );
   };
+  
+  const pageTitle = {
+      weekly: "This Week's Performance",
+      monthly: "This Month's Performance",
+      all: "All-Time Performance"
+  }[timeframe];
 
   return (
     <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h1 className="text-2xl font-bold tracking-tight">Product overview</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
             <Tabs value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)}>
                 <TabsList>
                     <TabsTrigger value="weekly">Weekly</TabsTrigger>
