@@ -51,7 +51,7 @@ export default function Home() {
           <TabsContent value="dashboard" className="mt-4">
             <ReportsTab />
           </TabsContent>
-          <TabsContent value="inventory" className="mt-4">
+          <TabsContent value="inventory" className="mt-4 space-y-4">
             <InventoryTab />
           </TabsContent>
           <TabsContent value="partners" className="mt-4">

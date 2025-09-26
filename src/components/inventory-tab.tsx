@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { PlusCircle, Package } from "lucide-react";
+import { PlusCircle, Package, Search } from "lucide-react";
 
-import { products as initialProducts } from "@/lib/data";
+import { products as initialProducts, transactions } from "@/lib/data";
 import type { Product } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const productSchema = z.object({
   type: z.enum(["individual", "sku"]),
@@ -74,6 +75,8 @@ const productSchema = z.object({
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("active");
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof productSchema>>({
@@ -99,6 +102,37 @@ export function InventoryTab() {
       }
     }
   }, [productType, form]);
+
+  const filteredProducts = useMemo(() => {
+    let tabProducts: Product[] = [];
+    const transactionProductIds = new Map<string, string>();
+    transactions.forEach(t => transactionProductIds.set(t.productId, t.type));
+
+    switch (activeTab) {
+      case "sold":
+        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'sale');
+        break;
+      case "borrowed":
+        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'borrow-in');
+        break;
+      case "lent":
+        tabProducts = products.filter(p => transactionProductIds.get(p.id) === 'lend-out');
+        break;
+      case "active":
+      default:
+        tabProducts = products.filter(p => p.stock > 0);
+        break;
+    }
+
+    if (!searchTerm) {
+      return tabProducts;
+    }
+
+    return tabProducts.filter(product =>
+      product.imei.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [products, activeTab, searchTerm]);
+
 
   function onSubmit(values: z.infer<typeof productSchema>) {
     const newProduct: Product = {
@@ -131,56 +165,83 @@ export function InventoryTab() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Inventory</CardTitle>
-            <CardDescription>
-              Manage your products and their stock levels.
-            </CardDescription>
-          </div>
-          <Button onClick={() => setIsDialogOpen(true)} size="sm">
+    <>
+    <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-semibold">Inventory</h1>
+            <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search by IMEI..."
+                    className="pl-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
+        <Button onClick={() => setIsDialogOpen(true)} size="sm">
             <PlusCircle className="mr-2 h-4 w-4" />
             Add Product
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Stock</TableHead>
-              <TableHead>IMEI</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {products.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell className="font-medium">{product.name}</TableCell>
-                <TableCell>
-                  <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
-                    <Package className="h-3 w-3" />
-                    {product.type}
-                  </Badge>
-                </TableCell>
-                <TableCell>{product.category}</TableCell>
-                <TableCell>{product.stock}</TableCell>
-                <TableCell className="font-mono text-xs">{product.imei}</TableCell>
-                <TableCell>{getStockStatus(product.stock)}</TableCell>
-                <TableCell className="text-right">
-                  ${product.price.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
+        </Button>
+    </div>
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <TabsList>
+        <TabsTrigger value="active">Active</TabsTrigger>
+        <TabsTrigger value="sold">Sold</TabsTrigger>
+        <TabsTrigger value="borrowed">Borrowed</TabsTrigger>
+        <TabsTrigger value="lent">Lent</TabsTrigger>
+      </TabsList>
+      <TabsContent value={activeTab}>
+        <Card>
+          <CardHeader>
+              <CardTitle>Products</CardTitle>
+              <CardDescription>
+                Manage your products and their stock levels.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>IMEI</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
+                        <Package className="h-3 w-3" />
+                        {product.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{product.category}</TableCell>
+                    <TableCell>{product.stock}</TableCell>
+                    <TableCell className="font-mono text-xs">{product.imei}</TableCell>
+                    <TableCell>{getStockStatus(product.stock)}</TableCell>
+                    <TableCell className="text-right">
+                      ${product.price.toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+             {filteredProducts.length === 0 && (
+              <div className="text-center text-muted-foreground py-8">
+                No products found.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -247,7 +308,7 @@ export function InventoryTab() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select
+                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
                       >
@@ -326,6 +387,6 @@ export function InventoryTab() {
           </Form>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   );
 }
