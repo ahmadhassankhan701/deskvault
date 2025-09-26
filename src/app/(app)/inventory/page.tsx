@@ -226,11 +226,14 @@ export default function InventoryPage() {
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
-                if (!product) return null; // Filter out transactions for deleted products
+                // If product is not found, we can't enrich this transaction.
+                if (!product) return null;
+                
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null && !!t.product);
+            // This filter is crucial to remove transactions for deleted products.
+            .filter((t): t is EnrichedTransaction => t !== null);
 
         if (searchTerm) {
             return soldTransactions.filter(t =>
