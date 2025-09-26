@@ -716,7 +716,6 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="">None</SelectItem>
                                         {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
@@ -737,7 +736,6 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="">None</SelectItem>
                                         {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
@@ -779,5 +777,3 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </>
   );
 }
-
-    
