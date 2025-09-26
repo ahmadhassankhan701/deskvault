@@ -50,9 +50,17 @@ const productSchema = z.object({
   type: z.enum(["individual", "sku"]),
   name: z.string().min(1, "Product name is required."),
   category: z.string().min(1, "Category is required."),
-  price: z.coerce.number().min(0.01, "Price must be positive."),
+  price: z.coerce.number().min(0, "Price cannot be negative."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
-  barcode: z.string().min(1, "Barcode is required."),
+  barcode: z.string().min(1, "Barcode or IMEI is required."),
+}).refine(data => {
+    if (data.type === 'individual') {
+        return data.stock === 1;
+    }
+    return true;
+}, {
+    message: "Stock must be 1 for individual products.",
+    path: ["stock"],
 });
 
 
@@ -78,6 +86,11 @@ export function InventoryTab() {
   useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
+    } else {
+      // Reset stock if switching back to SKU from individual if it was 1
+      if (form.getValues("stock") === 1) {
+          form.setValue("stock", 0);
+      }
     }
   }, [productType, form]);
 
@@ -86,7 +99,6 @@ export function InventoryTab() {
       id: `prod-${Date.now()}`,
       ...values,
       stock: values.type === 'individual' ? 1 : values.stock,
-      imei: values.type === 'individual' ? values.barcode : undefined,
     };
     setProducts([newProduct, ...products]);
     toast({
@@ -102,7 +114,7 @@ export function InventoryTab() {
       return (
         <Badge variant="destructive">Out of Stock</Badge>
       );
-    if (stock < 10)
+    if (stock < 10 && stock > 0)
       return (
         <Badge variant="secondary" className="bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200">
           Low Stock
@@ -135,7 +147,7 @@ export function InventoryTab() {
               <TableHead>Type</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Stock</TableHead>
-              <TableHead>Barcode</TableHead>
+              <TableHead>Barcode / IMEI</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Price</TableHead>
             </TableRow>
@@ -182,7 +194,7 @@ export function InventoryTab() {
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        value={field.value}
+                        defaultValue={field.value}
                         className="flex items-center space-x-4"
                       >
                         <FormItem className="flex items-center space-x-2 space-y-0">
@@ -261,7 +273,7 @@ export function InventoryTab() {
                     <FormItem>
                       <FormLabel>Price</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="29.99" {...field} />
+                        <Input type="number" step="0.01" placeholder="0" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -274,7 +286,7 @@ export function InventoryTab() {
                     <FormItem>
                       <FormLabel>Stock</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="100" {...field} disabled={productType === 'individual'} />
+                        <Input type="number" placeholder="0" {...field} disabled={productType === 'individual'} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

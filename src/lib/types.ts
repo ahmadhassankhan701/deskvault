@@ -7,8 +7,7 @@ export type Product = {
   category: string;
   stock: number;
   price: number;
-  imei?: string; // IMEI is the barcode for individual items
-  barcode: string;
+  barcode: string; // This will hold either the SKU barcode or the individual item's IMEI
 };
 
 export type Partner = {

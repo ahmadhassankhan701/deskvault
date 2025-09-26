@@ -3,10 +3,10 @@ import type { Product, Transaction, Expense, Partner } from "./types";
 
 export const products: Product[] = [
   { id: "prod-1", type: "sku", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals", barcode: "8901234567890" },
-  { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", imei: "123456789012345", barcode: "123456789012345" },
+  { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", barcode: "123456789012345" },
   { id: "prod-3", type: "sku", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals", barcode: "8901234567891" },
   { id: "prod-4", type: "sku", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture", barcode: "8901234567892" },
-  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio", imei: "543210987654321", barcode: "543210987654321"},
+  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 0, price: 199.99, category: "Audio", barcode: "543210987654321"},
   { id: "prod-6", type: "sku", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", barcode: "8901234567893" },
 ];
 
