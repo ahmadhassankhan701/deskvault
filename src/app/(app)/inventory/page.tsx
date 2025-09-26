@@ -222,16 +222,15 @@ export default function InventoryPage() {
     }
 
     if (activeTab === 'sold') {
-        const soldTransactions = transactions
+        let soldTransactions = transactions
             .filter(t => t.type === 'sale')
             .map(t => {
                 const product = productMap.get(t.productId);
                 if (!product) return null;
-                
                 const partner = partnerMap.get(t.party);
                 return { ...t, product, partner };
             })
-            .filter((t): t is EnrichedTransaction => t !== null);
+            .filter((t): t is EnrichedTransaction => t !== null && t.product !== undefined);
 
         if (searchTerm) {
             return soldTransactions.filter(t =>
