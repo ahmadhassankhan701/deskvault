@@ -231,10 +231,25 @@ export function InventoryTab() {
     setProductToDelete(null);
   }
 
+  const handleReturnLentItem = (productId: string) => {
+    setTransactions(prev => prev.filter(t => !(t.productId === productId && t.type === 'lend-out')));
+    toast({
+        title: "Product Returned",
+        description: "The product is now marked as active.",
+    });
+  };
+
   function onSubmit(values: z.infer<typeof productSchema>) {
+    const isNewProduct = !editingProduct;
     let productId = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
     
-    if (editingProduct) {
+    // Remove any existing lend-out transaction for this product if there is a change.
+    const existingLentTransaction = transactions.find(t => t.productId === productId && t.type === 'lend-out');
+    if (existingLentTransaction && existingLentTransaction.party !== values.lentTo) {
+        setTransactions(prev => prev.filter(t => t.id !== existingLentTransaction.id));
+    }
+
+    if (!isNewProduct) {
       const updatedProducts = products.map(p =>
         p.id === editingProduct.id ? { ...p, ...values, imei: values.imei, stock: values.type === 'individual' ? 1 : values.stock } : p
       );
@@ -256,8 +271,8 @@ export function InventoryTab() {
       });
     }
     
-    // Create transaction if needed
-    if (values.lentTo) {
+    // Create lend-out transaction if a partner is selected and no transaction exists yet.
+    if (values.lentTo && (!existingLentTransaction || existingLentTransaction.party !== values.lentTo)) {
          const newTransaction: Transaction = {
             id: `txn-${Date.now()}`,
             productId: productId,
@@ -271,7 +286,6 @@ export function InventoryTab() {
         setTransactions(prev => [newTransaction, ...prev]);
         toast({ title: "Product Lent", description: `Logged lend-out for ${values.name} to ${values.lentTo}.` });
     }
-
 
     setIsDialogOpen(false);
     setEditingProduct(null);
@@ -448,6 +462,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
           <TableHead>Partner</TableHead>
           <TableHead>Date</TableHead>
           <TableHead>IMEI</TableHead>
+          <TableHead><span className="sr-only">Actions</span></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -457,6 +472,11 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             <PartnerCell partner={partner} />
             <TableCell>{transaction ? format(new Date(transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
             <TableCell className="font-mono text-xs">{imei}</TableCell>
+            <TableCell className="text-right">
+              <Button variant="outline" size="sm" onClick={() => handleReturnLentItem(id)}>
+                Mark as Active
+              </Button>
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
