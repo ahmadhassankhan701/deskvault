@@ -79,7 +79,6 @@ const productSchema = z.object({
   price: z.coerce.number().min(0, "Price cannot be negative."),
   stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
   imei: z.string().optional(),
-  borrowedFrom: z.string().optional(),
   lentTo: z.string().optional(),
 }).refine(data => {
     if (data.type === 'individual') {
@@ -89,11 +88,6 @@ const productSchema = z.object({
 }, {
     message: "Stock must be 1 for individual products.",
     path: ["stock"],
-}).refine(data => {
-    return !(data.borrowedFrom && data.lentTo);
-}, {
-    message: "A product cannot be borrowed and lent at the same time.",
-    path: ["lentTo"],
 });
 
 
@@ -119,7 +113,6 @@ export function InventoryTab() {
       stock: 0,
       price: 0,
       imei: "",
-      borrowedFrom: "",
       lentTo: "",
     },
   });
@@ -128,7 +121,7 @@ export function InventoryTab() {
 
   useEffect(() => {
     if (editingProduct) {
-      const activeTransaction = transactions.find(t => t.productId === editingProduct.id && (t.type === 'borrow-in' || t.type === 'lend-out'));
+      const activeTransaction = transactions.find(t => t.productId === editingProduct.id && t.type === 'lend-out');
       
       form.reset({
         type: editingProduct.type,
@@ -137,7 +130,6 @@ export function InventoryTab() {
         price: editingProduct.price,
         stock: editingProduct.stock,
         imei: editingProduct.imei,
-        borrowedFrom: activeTransaction?.type === 'borrow-in' ? activeTransaction.party : "",
         lentTo: activeTransaction?.type === 'lend-out' ? activeTransaction.party : "",
       });
     } else {
@@ -148,7 +140,6 @@ export function InventoryTab() {
         stock: 0,
         price: 0,
         imei: "",
-        borrowedFrom: "",
         lentTo: "",
       });
     }
@@ -157,7 +148,6 @@ export function InventoryTab() {
   useEffect(() => {
     if (productType === "individual") {
       form.setValue("stock", 1);
-      form.setValue("borrowedFrom", "");
       form.setValue("lentTo", "");
     } else {
       if (form.getValues("stock") === 1 && !editingProduct) {
@@ -178,7 +168,7 @@ export function InventoryTab() {
 
     if (activeTab === 'active') {
         const productIdsInActiveTransactions = new Set(transactions
-            .filter(t => ['sale', 'lend-out', 'borrow-in'].includes(t.type))
+            .filter(t => ['sale', 'lend-out'].includes(t.type))
             .map(t => t.productId)
         );
 
@@ -187,7 +177,6 @@ export function InventoryTab() {
     } else {
         const relevantTxnTypes: string[] = {
             'sold': ['sale'],
-            'borrowed': ['borrow-in'],
             'lent': ['lend-out'],
         }[activeTab] || [];
         
@@ -201,7 +190,6 @@ export function InventoryTab() {
     let enriched = tabProducts.map(p => {
         const transaction = transactions.find(t => t.productId === p.id && {
             'sold': t.type === 'sale',
-            'borrowed': t.type === 'borrow-in',
             'lent': t.type === 'lend-out',
         }[activeTab]);
         const partner = transaction ? partnerMap.get(transaction.party) : undefined;
@@ -270,20 +258,7 @@ export function InventoryTab() {
     }
     
     // Create transaction if needed
-    if (values.borrowedFrom) {
-        const newTransaction: Transaction = {
-            id: `txn-${Date.now()}`,
-            productId: productId,
-            type: 'borrow-in',
-            quantity: 1,
-            price: 0,
-            totalAmount: 0,
-            date: new Date().toISOString(),
-            party: values.borrowedFrom
-        };
-        setTransactions(prev => [newTransaction, ...prev]);
-        toast({ title: "Product Borrowed", description: `Logged borrow-in for ${values.name} from ${values.borrowedFrom}.` });
-    } else if (values.lentTo) {
+    if (values.lentTo) {
          const newTransaction: Transaction = {
             id: `txn-${Date.now()}`,
             productId: productId,
@@ -445,7 +420,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </Table>
   );
 
-  const renderLentBorrowedTable = () => (
+  const renderLentTable = () => (
     <Table>
       <TableHeader>
         <TableRow>
@@ -493,7 +468,6 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
       <TabsList>
         <TabsTrigger value="active">Active</TabsTrigger>
         <TabsTrigger value="sold">Sold</TabsTrigger>
-        <TabsTrigger value="borrowed">Borrowed</TabsTrigger>
         <TabsTrigger value="lent">Lent</TabsTrigger>
       </TabsList>
       <TabsContent value="active">
@@ -532,24 +506,6 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="borrowed">
-        <Card>
-            <CardHeader>
-                <CardTitle>Borrowed Products</CardTitle>
-                <CardDescription>
-                    Products you have borrowed from partners.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {renderLentBorrowedTable()}
-                {filteredProducts.length === 0 && (
-                    <div className="text-center text-muted-foreground py-8">
-                        No borrowed products found.
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-      </TabsContent>
       <TabsContent value="lent">
         <Card>
             <CardHeader>
@@ -559,7 +515,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {renderLentBorrowedTable()}
+                {renderLentTable()}
                 {filteredProducts.length === 0 && (
                     <div className="text-center text-muted-foreground py-8">
                         No lent products found.
@@ -704,27 +660,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
               </div>
               
               {productType === 'individual' && (
-                <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                        control={form.control}
-                        name="borrowedFrom"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Borrowed from</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="None" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                <div className="grid grid-cols-1 gap-4">
                     <FormField
                         control={form.control}
                         name="lentTo"

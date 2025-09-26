@@ -2,16 +2,16 @@ import { subDays, subMonths } from "date-fns";
 import type { Product, Transaction, Expense, Partner } from "./types";
 
 export const products: Product[] = [
-  { id: "prod-1", type: "sku", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals", imei: "8901234567890", barcode: "8901234567890" },
-  { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", imei: "123456789012345", barcode: "123456789012345" },
-  { id: "prod-3", type: "sku", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals", imei: "8901234567891", barcode: "8901234567891" },
-  { id: "prod-4", type: "sku", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture", imei: "8901234567892", barcode: "8901234567892" },
-  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 1, price: 199.99, category: "Audio", imei: "543210987654321", barcode: "543210987654321"},
-  { id: "prod-6", type: "sku", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", imei: "8901234567893", barcode: "8901234567893" },
-  { id: "prod-7", type: "individual", name: "Macbook Pro 14 inch", stock: 1, price: 2499.00, category: "Laptops", imei: "112233445566778", barcode: "112233445566778"},
-  { id: "prod-8", type: "individual", name: "iPhone 15 Pro", stock: 1, price: 999.00, category: "Mobiles", imei: "887766554433221", barcode: "887766554433221"},
-  { id: "prod-9", type: "individual", name: "iPad Air", stock: 1, price: 799.00, category: "Tablets", imei: "123123123123123", barcode: "123123123123123"},
-  { id: "prod-10", type: "individual", name: "Galaxy S24 Ultra", stock: 1, price: 1299.00, category: "Mobiles", imei: "321321321321321", barcode: "321321321321321"},
+  { id: "prod-1", type: "sku", name: "Ergo-Comfort Keyboard", stock: 50, price: 79.99, category: "Peripherals", imei: "8901234567890" },
+  { id: "prod-2", type: "individual", name: "4K Ultra-Wide Monitor", stock: 1, price: 499.99, category: "Displays", imei: "123456789012345" },
+  { id: "prod-3", type: "sku", name: "Vertical Ergonomic Mouse", stock: 75, price: 45.50, category: "Peripherals", imei: "8901234567891" },
+  { id: "prod-4", type: "sku", name: "Standing Desk Converter", stock: 8, price: 250.00, category: "Furniture", imei: "8901234567892" },
+  { id: "prod-5", type: "individual", name: "Noise-Cancelling Headphones", stock: 1, price: 199.99, category: "Audio", imei: "543210987654321"},
+  { id: "prod-6", type: "sku", name: "Docking Station (USB-C)", stock: 30, price: 120.00, category: "Accessories", imei: "8901234567893" },
+  { id: "prod-7", type: "individual", name: "Macbook Pro 14 inch", stock: 1, price: 2499.00, category: "Laptops", imei: "112233445566778"},
+  { id: "prod-8", type: "individual", name: "iPhone 15 Pro", stock: 0, price: 999.00, category: "Mobiles", imei: "887766554433221"},
+  { id: "prod-9", type: "individual", name: "iPad Air", stock: 0, price: 799.00, category: "Tablets", imei: "123123123123123"},
+  { id: "prod-10", type: "individual", name: "Galaxy S24 Ultra", stock: 0, price: 1299.00, category: "Mobiles", imei: "321321321321321"},
 ];
 
 export const partners: Partner[] = [
@@ -93,16 +93,6 @@ export const transactions: Transaction[] = [
     totalAmount: 2499.00,
     date: subMonths(new Date(), 1).toISOString(),
     party: "Creative Agency",
-  },
-  {
-    id: "txn-8",
-    productId: "prod-8",
-    type: "borrow-in",
-    quantity: 1,
-    price: 0,
-    totalAmount: 0,
-    date: subDays(new Date(), 7).toISOString(),
-    party: "Innovate LLC",
   },
   {
     id: "txn-9",

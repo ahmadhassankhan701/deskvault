@@ -1,4 +1,4 @@
-export type TransactionType = "purchase" | "sale" | "borrow-in" | "lend-out" | "borrow-return" | "lend-return";
+export type TransactionType = "purchase" | "sale" | "lend-out" | "lend-return";
 
 export type Product = {
   id: string;
