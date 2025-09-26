@@ -6,7 +6,7 @@ export type Product = {
   name: string;
   category: string;
   stock: number;
-  price: number;
+  price: number; // This is the purchase price
   imei?: string;
 };
 
@@ -23,7 +23,7 @@ export type Transaction = {
   productId: string;
   type: TransactionType;
   quantity: number;
-  price: number; // price per unit
+  price: number; // price per unit for the transaction (e.g. sale price)
   totalAmount: number;
   date: string;
   party: string; // Customer, Supplier, or other Partner
@@ -36,3 +36,5 @@ export type Expense = {
   description: string;
   amount: number;
 };
+
+    

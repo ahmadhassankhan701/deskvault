@@ -101,6 +101,7 @@ const saleSchema = z.object({
 
 
 type EnrichedProduct = Product & { transaction?: Transaction, partner?: Partner };
+type EnrichedTransaction = Transaction & { product: Product, partner?: Partner };
 
 export function InventoryTab() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -215,51 +216,61 @@ export function InventoryTab() {
     }
   }, [productType, productForm, editingProduct]);
 
- const filteredProducts = useMemo((): EnrichedProduct[] => {
-    const partnerMap = new Map<string, Partner>();
-    partners.forEach(p => partnerMap.set(p.name, p));
-
-    let tabProducts: Product[] = [];
-    const sourceProducts = products;
+  const filteredProducts = useMemo(() => {
+    const partnerMap = new Map(partners.map(p => [p.name, p]));
+    const productMap = new Map(products.map(p => [p.id, p]));
 
     if (activeTab === 'active') {
-        const productIdsInActiveTransactions = new Set(transactions
-            .filter(t => ['sale', 'lend-out'].includes(t.type))
-            .map(t => t.productId)
-        );
+        const lentOutProductIds = new Set(transactions.filter(t => t.type === 'lend-out').map(t => t.productId));
+        let activeProducts = products.filter(p => p.stock > 0 && !lentOutProductIds.has(p.id));
 
-        tabProducts = sourceProducts.filter(p => p.stock > 0 && !productIdsInActiveTransactions.has(p.id));
+        if (searchTerm) {
+            activeProducts = activeProducts.filter(p =>
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        return activeProducts;
+    }
 
-    } else {
-        const relevantTxnTypes: string[] = {
-            'sold': ['sale'],
-            'lent': ['lend-out'],
-        }[activeTab] || [];
+    if (activeTab === 'sold') {
+        let soldTransactions = transactions
+            .filter(t => t.type === 'sale')
+            .map(t => {
+                const product = productMap.get(t.productId);
+                const partner = partnerMap.get(t.party);
+                return { ...t, product: product!, partner };
+            })
+            .filter(t => t.product);
+
+        if (searchTerm) {
+            soldTransactions = soldTransactions.filter(t =>
+                t.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.product.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        return soldTransactions;
+    }
+    
+    if (activeTab === 'lent') {
+        let lentProducts: EnrichedProduct[] = transactions
+            .filter(t => t.type === 'lend-out')
+            .map(t => {
+                const product = productMap.get(t.productId)!;
+                const partner = partnerMap.get(t.party);
+                return { ...product, transaction: t, partner };
+            }).filter(p => p);
         
-        const productIdsInTransactions = new Set(transactions
-            .filter(t => relevantTxnTypes.includes(t.type))
-            .map(t => t.productId));
-            
-        tabProducts = sourceProducts.filter(p => productIdsInTransactions.has(p.id));
+        if (searchTerm) {
+            lentProducts = lentProducts.filter(p =>
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.imei?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        return lentProducts;
     }
 
-    let enriched = tabProducts.map(p => {
-        const transaction = transactions.find(t => t.productId === p.id && {
-            'sold': t.type === 'sale',
-            'lent': t.type === 'lend-out',
-        }[activeTab]);
-        const partner = transaction ? partnerMap.get(transaction.party) : undefined;
-        return { ...p, transaction, partner };
-    });
-
-    if (!searchTerm) {
-      return enriched;
-    }
-
-    return enriched.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.imei?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return [];
   }, [activeTab, searchTerm, products, transactions, partners]);
   
   const handleAddNew = () => {
@@ -285,6 +296,8 @@ export function InventoryTab() {
   const confirmDelete = () => {
     if (productToDelete) {
       setProducts(products.filter(p => p.id !== productToDelete.id));
+      // Also remove associated transactions
+      setTransactions(transactions.filter(t => t.productId !== productToDelete.id));
       toast({
         title: "Product Deleted",
         description: `${productToDelete.name} has been removed.`,
@@ -306,7 +319,6 @@ export function InventoryTab() {
     const isNewProduct = !editingProduct;
     let productId = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
     
-    // Remove any existing lend-out transaction for this product if there is a change.
     const existingLentTransaction = transactions.find(t => t.productId === productId && t.type === 'lend-out');
     if (existingLentTransaction && existingLentTransaction.party !== values.lentTo) {
         setTransactions(prev => prev.filter(t => t.id !== existingLentTransaction.id));
@@ -334,7 +346,6 @@ export function InventoryTab() {
       });
     }
     
-    // Create lend-out transaction if a partner is selected and no transaction exists yet.
     if (values.lentTo && (!existingLentTransaction || existingLentTransaction.party !== values.lentTo)) {
          const newTransaction: Transaction = {
             id: `txn-${Date.now()}`,
@@ -479,7 +490,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filteredProducts.map((product) => (
+        {(filteredProducts as Product[]).map((product) => (
           <TableRow key={product.id}>
             <TableCell className="font-medium">{product.name}</TableCell>
             <TableCell>
@@ -529,6 +540,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
       <TableHeader>
         <TableRow>
           <TableHead>Product Name</TableHead>
+           <TableHead>Type</TableHead>
           <TableHead>Sold To</TableHead>
           <TableHead>Selling Date</TableHead>
           <TableHead>IMEI</TableHead>
@@ -538,18 +550,24 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filteredProducts.map((p) => {
-            const salePrice = p.transaction?.price ?? 0;
-            const quantity = p.transaction?.quantity ?? 1;
-            const purchasePrice = p.price;
+        {(filteredProducts as EnrichedTransaction[]).map((t) => {
+            const salePrice = t.price ?? 0;
+            const quantity = t.quantity ?? 1;
+            const purchasePrice = t.product.price;
             const profit = (salePrice - purchasePrice) * quantity;
             
             return (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.name}</TableCell>
-                <SoldToCell partner={p.partner} />
-                <TableCell>{p.transaction ? format(new Date(p.transaction.date), "MMM d, yyyy, h:mm a") : 'N/A'}</TableCell>
-                <TableCell className="font-mono text-xs">{p.imei}</TableCell>
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.product.name}</TableCell>
+                <TableCell>
+                  <Badge variant={t.product.type === 'individual' ? 'outline' : 'secondary'} className="gap-1 capitalize">
+                    <Package className="h-3 w-3" />
+                    {t.product.type}
+                  </Badge>
+                </TableCell>
+                <SoldToCell partner={t.partner} />
+                <TableCell>{format(new Date(t.date), "MMM d, yyyy, h:mm a")}</TableCell>
+                <TableCell className="font-mono text-xs">{t.product.imei}</TableCell>
                 <TableCell className="text-right">
                   ${purchasePrice.toFixed(2)}
                 </TableCell>
@@ -578,7 +596,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filteredProducts.map(({id, name, transaction, partner, imei}) => (
+        {(filteredProducts as EnrichedProduct[]).map(({id, name, transaction, partner, imei}) => (
           <TableRow key={id}>
             <TableCell className="font-medium">{name}</TableCell>
             <PartnerCell partner={partner} />
@@ -827,6 +845,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
+                                        <SelectItem value=" ">None</SelectItem>
                                         {partners.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
@@ -933,7 +952,7 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the product
-              "{productToDelete?.name}" from your inventory.
+              "{productToDelete?.name}" from your inventory and all associated transactions.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -945,3 +964,5 @@ const SoldToCell = ({ partner }: { partner?: Partner }) => {
     </>
   );
 }
+
+    
