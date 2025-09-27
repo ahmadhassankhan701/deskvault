@@ -3,8 +3,6 @@ import path from "path";
 import fs from "fs";
 
 // IMPORTANT: Define the absolute path to the database file.
-// We use process.cwd() to get the project root directory, which is essential
-// for Node.js environments like Next.js API routes to find the file correctly.
 const dbDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir);
@@ -12,7 +10,6 @@ if (!fs.existsSync(dbDir)) {
 const dbPath = path.join(dbDir, "local_db.sqlite");
 
 // Create the connection object. This opens the connection to the database file.
-// If the file does not exist, it will be created automatically.
 const db = new Database(dbPath);
 
 /**
@@ -24,13 +21,13 @@ function initializeDatabase() {
 
   // Wrap the setup in a transaction to ensure all table creations are atomic.
   db.transaction(() => {
-    // --- Table 1: Products (For your inventory/shop items) ---
+    // --- Table 1: Products (Name remains UNIQUE as products usually have unique SKUs/names) ---
     db.prepare(
       `
             CREATE TABLE IF NOT EXISTS products (
                 id TEXT PRIMARY KEY,
                 type TEXT NOT NULL CHECK(type IN ('individual', 'sku')),
-                name TEXT NOT NULL,
+                name TEXT NOT NULL UNIQUE, 
                 category TEXT NOT NULL,
                 stock INTEGER NOT NULL DEFAULT 0,
                 price REAL NOT NULL DEFAULT 0.0,
@@ -40,43 +37,50 @@ function initializeDatabase() {
         `
     ).run();
 
-    // --- Table 2: Partners (For partner tracking/CRM) ---
+    // --- Table 2: Partners (UPDATED: 'name' is no longer UNIQUE) ---
     db.prepare(
       `
             CREATE TABLE IF NOT EXISTS partners (
                 id TEXT PRIMARY KEY,
                 type TEXT NOT NULL CHECK(type IN ('individual', 'shop')),
-                name TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
                 phone TEXT NOT NULL,
                 shopName TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         `
     ).run();
+
+    // --- Table 3: Transactions (Now correctly using partnerId and including created_at) ---
     db.prepare(
       `
            CREATE TABLE IF NOT EXISTS transactions (
                 id TEXT PRIMARY KEY,
                 productId TEXT NOT NULL,
-                type TEXT NOT NULL CHECK(type IN ('purchase', 'sale', 'lend-out')),
+                type TEXT NOT NULL CHECK(type IN ('purchase', 'sale', 'lend-out', 'return')),
                 quantity INTEGER NOT NULL,
                 price REAL NOT NULL,
                 totalAmount REAL NOT NULL,
-                date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                date DATETIME NOT NULL,
                 party TEXT NOT NULL,
+                partnerId TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
-                FOREIGN KEY (party) REFERENCES partners(name) ON DELETE SET NULL
+                FOREIGN KEY (partnerId) REFERENCES partners(id) ON DELETE SET NULL
             );
         `
     ).run();
+
+    // --- Table 4: Expenses (Now correctly including created_at) ---
     db.prepare(
       `
            CREATE TABLE IF NOT EXISTS expenses (
                 id TEXT PRIMARY KEY,
-                date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                date DATETIME NOT NULL,
                 category TEXT NOT NULL CHECK(category IN ('rent', 'salaries', 'utilities', 'stock', 'other')),
                 description TEXT NOT NULL,
-                amount REAL NOT NULL
+                amount REAL NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         `
     ).run();
