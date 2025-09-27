@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 // Import the Expense type from the API route for consistency
-import { Expense } from "@/app/api/expenses/route";
+import { Expense } from "@/lib/types";
 // import { useData } from "@/context/data-context"; // Removed
 
 import { cn } from "@/lib/utils";

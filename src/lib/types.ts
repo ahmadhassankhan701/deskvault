@@ -1,4 +1,5 @@
 // --- Data Types shared between API routes and Frontend ---
+// Centralized shared types
 
 export type Expense = {
   id: string;
@@ -6,6 +7,9 @@ export type Expense = {
   category: "rent" | "salaries" | "utilities" | "stock" | "other";
   description: string;
   amount: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 };
 
 // Types used in InventoryPage for enriched display
@@ -13,6 +17,7 @@ export type EnrichedProduct = Product & {
   transaction?: Transaction;
   partner?: Partner;
 };
+
 export type EnrichedTransaction = Transaction & {
   product?: Product;
   partner?: Partner;
@@ -27,6 +32,8 @@ export type Product = {
   price: number; // Cost Price
   imei?: string;
   created_at: string; // DATETIME ISO string
+  updated_at: string;
+  deleted_at?: string | null;
 };
 
 export type Partner = {
@@ -36,15 +43,21 @@ export type Partner = {
   phone: string;
   shop_name?: string;
   created_at: string; // DATETIME ISO string
+  updated_at: string;
+  deleted_at?: string | null;
 };
 
 export type Transaction = {
   id: string;
-  productId: string;
-  type: "purchase" | "sale" | "lend-out";
+  product_id: string;
+  type: "purchase" | "sale" | "lend-out" | "return";
   quantity: number;
   price: number; // Price per unit at time of transaction (e.g., Sale Price)
-  totalAmount: number;
+  total_amount: number;
   date: string; // DATETIME ISO string
-  party: string; // Partner Name (soft foreign key to partners.name)
+  partner_id: string;
+  snapshot_partner_name?: string; // store name at the time of transaction
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 };

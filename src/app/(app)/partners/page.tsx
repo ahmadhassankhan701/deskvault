@@ -152,7 +152,7 @@ export default function PartnersPage() {
         type: editingPartner.type,
         name: editingPartner.name,
         phone: editingPartner.phone,
-        shopName: editingPartner.shopName || "",
+        shopName: editingPartner.shop_name || "",
       });
     } else {
       form.reset({
@@ -349,7 +349,7 @@ export default function PartnersPage() {
                       </TableCell>
                       <TableCell>{partner.phone}</TableCell>
                       <TableCell>
-                        {partner.shopName ?? (
+                        {partner.shop_name ?? (
                           <span className="text-gray-500 italic">N/A</span>
                         )}
                       </TableCell>

@@ -19,77 +19,95 @@ const db = new Database(dbPath);
 function initializeDatabase() {
   console.log("[DB] Checking and initializing database schema...");
 
-  // Wrap the setup in a transaction to ensure all table creations are atomic.
   db.transaction(() => {
-    // --- Table 1: Products (Name remains UNIQUE as products usually have unique SKUs/names) ---
+    // --- Table 1: Products ---
     db.prepare(
       `
-            CREATE TABLE IF NOT EXISTS products (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL CHECK(type IN ('individual', 'sku')),
-                name TEXT NOT NULL UNIQUE, 
-                category TEXT NOT NULL,
-                stock INTEGER NOT NULL DEFAULT 0,
-                price REAL NOT NULL DEFAULT 0.0,
-                imei TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-        `
+      CREATE TABLE IF NOT EXISTS products (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK(type IN ('individual', 'sku')),
+        name TEXT NOT NULL UNIQUE,
+        category TEXT NOT NULL,
+        stock INTEGER NOT NULL DEFAULT 0,
+        price REAL NOT NULL DEFAULT 0.0,
+        imei TEXT UNIQUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME
+      );
+      `
     ).run();
 
-    // --- Table 2: Partners (UPDATED: 'name' is no longer UNIQUE) ---
+    // --- Table 2: Partners ---
     db.prepare(
       `
-            CREATE TABLE IF NOT EXISTS partners (
-                id TEXT PRIMARY KEY,
-                type TEXT NOT NULL CHECK(type IN ('individual', 'shop')),
-                name TEXT NOT NULL,
-                phone TEXT NOT NULL,
-                shopName TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-        `
+      CREATE TABLE IF NOT EXISTS partners (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK(type IN ('individual', 'shop')),
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        shop_name TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME
+      );
+      `
     ).run();
 
-    // --- Table 3: Transactions (Now correctly using partnerId and including created_at) ---
+    // --- Table 3: Transactions ---
     db.prepare(
       `
-           CREATE TABLE IF NOT EXISTS transactions (
-                id TEXT PRIMARY KEY,
-                productId TEXT NOT NULL,
-                type TEXT NOT NULL CHECK(type IN ('purchase', 'sale', 'lend-out', 'return')),
-                quantity INTEGER NOT NULL,
-                price REAL NOT NULL,
-                totalAmount REAL NOT NULL,
-                date DATETIME NOT NULL,
-                party TEXT NOT NULL,
-                partnerId TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
-                FOREIGN KEY (partnerId) REFERENCES partners(id) ON DELETE SET NULL
-            );
-        `
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('purchase', 'sale', 'lend-out', 'return')),
+        quantity INTEGER NOT NULL,
+        price REAL NOT NULL,
+        total_amount REAL NOT NULL,
+        date DATETIME NOT NULL,
+        partner_id TEXT NOT NULL,
+        snapshot_partner_name TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE SET NULL
+      );
+      `
     ).run();
 
-    // --- Table 4: Expenses (Now correctly including created_at) ---
+    // --- Table 4: Expenses ---
     db.prepare(
       `
-           CREATE TABLE IF NOT EXISTS expenses (
-                id TEXT PRIMARY KEY,
-                date DATETIME NOT NULL,
-                category TEXT NOT NULL CHECK(category IN ('rent', 'salaries', 'utilities', 'stock', 'other')),
-                description TEXT NOT NULL,
-                amount REAL NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-        `
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        date DATETIME NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('rent', 'salaries', 'utilities', 'stock', 'other')),
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME
+      );
+      `
     ).run();
-    console.log("[DB] Schema setup complete and connection established.");
-  })(); // Immediately execute the transaction function
+
+    // --- Indexes for performance ---
+    db.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);`
+    ).run();
+    db.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);`
+    ).run();
+    db.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_partners_phone ON partners(phone);`
+    ).run();
+  })();
+
+  console.log("[DB] Schema setup complete and connection established.");
 }
 
 // Run the setup function
 initializeDatabase();
 
-// Export the connected database object. All API routes will import this to interact with SQLite.
 export { db };
