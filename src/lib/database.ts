@@ -65,7 +65,7 @@ function initializeDatabase() {
         price REAL NOT NULL,
         total_amount REAL NOT NULL,
         date DATETIME NOT NULL,
-        partner_id TEXT NOT NULL,
+        partner_id TEXT,
         snapshot_partner_name TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

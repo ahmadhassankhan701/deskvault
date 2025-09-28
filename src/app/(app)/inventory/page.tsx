@@ -1,687 +1,943 @@
 "use client";
-
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
-  PlusCircle,
+  RefreshCw,
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+  AlertTriangle,
+  Loader,
   Package,
-  Search,
-  User,
-  Building,
-  Phone,
-  MoreHorizontal,
-  Loader2,
+  Zap,
+  DollarSign,
+  Repeat,
+  Info,
+  ChevronDown,
+  MoreVertical,
 } from "lucide-react";
-import { format } from "date-fns";
-
-// Import types from the shared library
-import type {
-  Product,
-  Transaction,
-  Partner,
-  EnrichedProduct,
-  EnrichedTransaction,
-} from "@/lib/types";
-
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
+  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+} from "@radix-ui/react-dropdown-menu";
 
-// --- Zod Schemas ---
+// --- TYPE DEFINITIONS (Based on provided APIs and context) ---
 
-const productSchema = z
-  .object({
-    type: z.enum(["individual", "sku"]),
-    name: z.string().min(1, "Product name is required."),
-    category: z.string().min(1, "Category is required."),
-    price: z.coerce.number().min(0, "Cost Price cannot be negative."),
-    stock: z.coerce.number().int().min(0, "Stock cannot be negative."),
-    imei: z.string().optional(),
-    lentTo: z.string().optional(), // Partner Name for lend-out tracking
-  })
-  .refine(
-    (data) => {
-      // Custom refinement for 'individual' product type
-      if (data.type === "individual") {
-        return data.stock === 1;
+/** Partner type (Placeholder structure, assuming this is fetched from /api/partners) */
+export type Partner = {
+  id: string;
+  type: "individual" | "shop";
+  name: string;
+  phone: string;
+  shop_name?: string | null;
+  created_at: string;
+};
+
+/** Product type from /api/products */
+export type Product = {
+  id: string;
+  type: "individual" | "sku";
+  name: string;
+  category: string;
+  price: number; // Current selling/lending price
+  stock: number;
+  imei?: string | null;
+  created_at: string;
+};
+
+/** Transaction type from /api/transactions (Aliased columns are used for naming) */
+export type Transaction = {
+  id: string;
+  productId: string; // Mapped from product_id
+  type: "purchase" | "sale" | "lend-out" | "return";
+  quantity: number;
+  price: number; // Unit price at time of transaction
+  totalAmount: number; // Mapped from total_amount
+  date: string; // ISO date string
+  party: string; // Buyer/Partner Name (mapped from snapshot_partner_name or party)
+  partnerId: string; // Mapped from partner_id
+  created_at: string;
+  productName?: string; // Client-side enhancement
+};
+
+/** Form data structure for adding/editing a Product */
+type ProductFormData = {
+  name: string;
+  category: string;
+  price: number;
+  stock: number;
+  type: Product["type"];
+  imei: string; // Used only if type is 'individual'
+};
+
+/** Form data structure for recording a Transaction */
+type TransactionFormData = {
+  type: Transaction["type"];
+  quantity: number;
+  partnerId: string;
+  partyName: string; // Name for the transaction record
+  date: string;
+};
+
+// --- CONSTANTS ---
+
+const INVENTORY_CATEGORIES: string[] = [
+  "Input Devices: (Keyboards, Mice, Stylus Pens, Gaming Controllers)",
+  "Audio & Sound: (Headphones, Earbuds, Microphones, Bluetooth Speakers)",
+  "Cables & Adapters: (USB-C, Lightning, HDMI, DisplayPort, Hubs, Dongles)",
+  "Charging & Power: (Wall Chargers, Power Banks, Wireless Chargers, Surge Protectors)",
+  "Storage: (External Hard Drives/SSDs, USB Flash Drives, SD/MicroSD Cards)",
+  "Mobile Protection: (Phone Cases, Screen Protectors, Camera Lens Protectors)",
+  "Computer Peripherals: (Webcams, Monitors, Stands, Mouse Pads, Lighting)",
+  "Carry & Protection: (Laptop Sleeves, Bags, Tablet Cases)",
+  "Networking: (Wi-Fi Extenders, Routers, Ethernet Cables)",
+  "Tools & Maintenance: (Cleaning Kits, Repair Tools, Cable Management)",
+];
+
+const initialProductFormData: ProductFormData = {
+  name: "",
+  category: INVENTORY_CATEGORIES[0],
+  price: 0,
+  stock: 0,
+  type: "sku",
+  imei: "",
+};
+
+const initialTransactionFormData: TransactionFormData = {
+  type: "sale",
+  quantity: 1,
+  partnerId: "",
+  partyName: "",
+  date: new Date().toISOString().substring(0, 10), // Today's date YYYY-MM-DD
+};
+
+// --- Helper Components & Functions ---
+
+/** Formats currency */
+const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+};
+
+/** Custom Modal Component */
+interface ModalProps {
+  children: React.ReactNode;
+  isOpen: boolean;
+  title: string;
+  onClose: () => void;
+  className?: string;
+}
+
+const Modal: React.FC<ModalProps> = ({
+  children,
+  isOpen,
+  title,
+  onClose,
+  className = "",
+}) =>
+  isOpen ? (
+    <div
+      className="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className={`bg-white rounded-xl shadow-2xl w-full max-w-xl p-6 relative max-h-[90vh] overflow-y-auto ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">
+          {title}
+        </h2>
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        {children}
+      </div>
+    </div>
+  ) : null;
+
+/** Custom Error/Message Alert Component */
+interface AlertProps {
+  message: string;
+  isError: boolean;
+}
+const Alert: React.FC<AlertProps> = ({ message, isError }) => (
+  <div
+    className={`p-3 mb-4 rounded-lg flex items-center shadow-sm ${
+      isError
+        ? "bg-red-100 text-red-700 border border-red-200"
+        : "bg-blue-100 text-blue-700 border border-blue-200"
+    }`}
+  >
+    {isError ? (
+      <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
+    ) : (
+      <Info className="w-5 h-5 mr-2 flex-shrink-0" />
+    )}
+    {message}
+  </div>
+);
+
+// --- Component: ActionDropdown (FIXED) ---
+interface ActionDropdownProps {
+  product: Product;
+  openProductModal: (product: Product) => void;
+  openTransactionModal: (product: Product, type: Transaction["type"]) => void;
+  handleDeleteClick: (product: Product) => void;
+}
+
+const ActionDropdown: React.FC<ActionDropdownProps> = ({
+  product,
+  openProductModal,
+  openTransactionModal,
+  handleDeleteClick,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const isIndividual = product.type === "individual";
+  const isOutOfStock = product.stock === 0;
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // FIX: Robust "Click Outside" handler to prevent flickering
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If the dropdown is open and the clicked element is not inside the dropdown container
+      if (
+        isOpen &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
       }
-      return true;
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]); // Only rerun effect when isOpen changes
+
+  // Define actions available in the dropdown
+  const actions = [
+    {
+      id: "edit",
+      label: "Edit Details",
+      icon: Edit2,
+      onClick: () => {
+        openProductModal(product);
+        setIsOpen(false); // Close dropdown after action
+      },
+      className: "text-blue-600 hover:bg-blue-50",
     },
     {
-      message: "Stock must be 1 for individual products.",
-      path: ["stock"],
-    }
+      id: "sale",
+      label: "Stock Out (Sale)",
+      icon: DollarSign,
+      onClick: () => {
+        openTransactionModal(product, "sale");
+        setIsOpen(false); // Close dropdown after action
+      },
+      disabled: isOutOfStock,
+      className: "text-red-600 hover:bg-red-50 disabled:text-gray-400",
+    },
+    // Conditional actions for individually tracked items (Lend/Return)
+    ...(isIndividual
+      ? [
+          {
+            id: "lend-out",
+            label: "Lend Out",
+            icon: Zap,
+            onClick: () => {
+              openTransactionModal(product, "lend-out");
+              setIsOpen(false); // Close dropdown after action
+            },
+            disabled: isOutOfStock,
+            className:
+              "text-indigo-600 hover:bg-indigo-50 disabled:text-gray-400",
+          },
+          {
+            id: "return",
+            label: "Record Return",
+            icon: Repeat,
+            onClick: () => {
+              openTransactionModal(product, "return");
+              setIsOpen(false); // Close dropdown after action
+            },
+            className: "text-yellow-600 hover:bg-yellow-50",
+          },
+        ]
+      : []),
+    {
+      id: "delete",
+      label: "Delete Product",
+      icon: Trash2,
+      onClick: () => {
+        handleDeleteClick(product);
+        setIsOpen(false); // Close dropdown after action
+      },
+      className:
+        "text-gray-700 hover:bg-gray-100 border-t border-gray-100 mt-2 pt-2",
+    },
+  ];
+
+  return (
+    // Attach the ref here
+    <div className="relative inline-block text-left z-10" ref={dropdownRef}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="relative z-10 p-2 rounded hover:bg-gray-100 transition">
+            <MoreVertical className="h-5 w-5 text-gray-600" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="top" // default (can omit)
+          align="end" // align to right of trigger
+          alignOffset={-5}
+          className="mt-2 w-48 rounded-md shadow-lg bg-gray-200 bg-opacity-100 ring-1 ring-black ring-opacity-5 focus:outline-none z-50"
+          sideOffset={8}
+        >
+          <div className="py-2 space-y-2">
+            {actions.map((action) => (
+              <DropdownMenuItem
+                key={action.id}
+                onClick={action.onClick}
+                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 cursor-pointer transition outline-none"
+                role="menuitem"
+              >
+                <action.icon className="w-4 h-4 mr-3 text-gray-500" />
+                {action.label}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
+};
+// --- Component: ConfirmDeleteModal ---
 
-const saleSchema = z.object({
-  buyerName: z.string().min(1, "Buyer name is required."),
-  buyerPhone: z.string().min(1, "Buyer phone is required."),
-  sellingPrice: z.coerce.number().min(0.01, "Selling price must be positive."),
-  quantity: z.coerce.number().int().min(1, "Quantity must be at least 1."),
-});
+interface ConfirmDeleteModalProps {
+  isOpen: boolean;
+  productName: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}
 
+const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
+  isOpen,
+  productName,
+  onClose,
+  onConfirm,
+  loading,
+}) => (
+  <Modal
+    isOpen={isOpen}
+    title={`Confirm Deletion of ${productName}`}
+    onClose={onClose}
+    className="max-w-md"
+  >
+    <div className="space-y-4">
+      <p className="text-gray-700">
+        You are about to delete the product:
+        <span className="font-semibold text-red-600 block mt-1">
+          {productName}
+        </span>
+      </p>
+      <p className="text-sm text-red-600 font-medium flex items-start p-3 bg-red-50 rounded-lg border border-red-200">
+        <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
+        WARNING: This action is irreversible and will delete ALL related sales,
+        lend-out, and return transactions for this product!
+      </p>
+      <div className="flex justify-end space-x-3 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150"
+          disabled={loading}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 transition duration-150 flex items-center justify-center"
+          disabled={loading}
+        >
+          {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
+          Yes, Delete Product
+        </button>
+      </div>
+    </div>
+  </Modal>
+);
+
+// --- Component: MovementsLog ---
+
+interface MovementsLogProps {
+  transactions: Transaction[];
+  products: Product[];
+  loading: boolean;
+}
+
+const MovementsLog: React.FC<MovementsLogProps> = ({
+  transactions,
+  products,
+  loading,
+}) => {
+  // Map product names to IDs for display
+  const productMap = useMemo(() => {
+    return products.reduce(
+      (acc, p) => ({ ...acc, [p.id]: p.name }),
+      {} as Record<string, string>
+    );
+  }, [products]);
+
+  const getStatusStyle = (type: Transaction["type"]) => {
+    switch (type) {
+      case "sale":
+        return "bg-red-100 text-red-800 border-red-300";
+      case "lend-out":
+        return "bg-indigo-100 text-indigo-800 border-indigo-300";
+      case "return":
+      case "purchase":
+        return "bg-green-100 text-green-800 border-green-300";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-300";
+    }
+  };
+
+  return (
+    <div className="pt-4">
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        All Inventory Movements
+      </h3>
+      {loading && transactions.length === 0 ? (
+        <div className="text-center p-8 text-gray-500">
+          <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+          Loading transactions...
+        </div>
+      ) : transactions.length === 0 ? (
+        <div className="p-6 text-center bg-gray-50 rounded-lg border border-gray-200">
+          No movements recorded yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {transactions.map((t) => (
+            <div
+              key={t.id}
+              className="p-4 bg-white rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition hover:shadow-md"
+            >
+              <div className="flex flex-col space-y-1">
+                <p className="text-lg font-bold text-gray-900">
+                  {t.quantity} x{" "}
+                  <span className="text-blue-600">
+                    {productMap[t.productId] || "Product Deleted"}
+                  </span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  {t.party || t.partnerId} |{" "}
+                  {new Date(t.date).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="text-right">
+                <span
+                  className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(
+                    t.type
+                  )}`}
+                >
+                  {t.type.toUpperCase().replace("-", " ")}
+                </span>
+                <p className="text-base font-bold mt-1">
+                  {formatCurrency(t.totalAmount)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Component: LentOutStatus ---
+
+interface LentOutStatusProps {
+  products: Product[];
+  transactions: Transaction[];
+  loading: boolean;
+}
+
+const LentOutStatus: React.FC<LentOutStatusProps> = ({
+  products,
+  transactions,
+  loading,
+}) => {
+  const lentOutSummary = useMemo(() => {
+    // 1. Calculate net lent quantity per product
+    const netLentMap = transactions.reduce((acc, t) => {
+      if (t.type === "lend-out") {
+        acc[t.productId] = (acc[t.productId] || 0) + t.quantity;
+      } else if (t.type === "return") {
+        acc[t.productId] = (acc[t.productId] || 0) - t.quantity;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    // 2. Filter products that currently have a net lent quantity > 0 AND are 'individual' type
+    return products
+      .filter((p) => p.type === "individual" && (netLentMap[p.id] || 0) > 0)
+      .map((product) => ({
+        product,
+        lentQuantity: netLentMap[product.id] || 0,
+      }));
+  }, [products, transactions]);
+
+  if (loading && lentOutSummary.length === 0) {
+    return (
+      <div className="text-center p-8 text-gray-500">
+        <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+        Calculating lent out status...
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-4">
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        Currently Lent Out Items (Net Quantity)
+      </h3>
+      {lentOutSummary.length === 0 ? (
+        <div className="p-6 text-center bg-green-50 rounded-lg border border-green-200 text-green-700">
+          <Info className="w-6 h-6 mx-auto mb-2" />
+          All individually tracked items have been successfully returned. Zero
+          net inventory is currently lent out.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {lentOutSummary.map(({ product, lentQuantity }) => (
+            <div
+              key={product.id}
+              className="p-4 bg-white rounded-xl shadow-sm border border-yellow-300 flex justify-between items-center transition hover:shadow-md"
+            >
+              <div>
+                <p className="text-lg font-bold text-gray-900">
+                  {product.name}
+                </p>
+                {product.imei && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    IMEI: {product.imei}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                  {lentQuantity} unit(s)
+                </span>
+                <p className="text-sm text-gray-600 mt-1">
+                  Active Stock: {product.stock}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Main Component ---
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [partners, setPartners] = useState<Partner[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [partners, setPartners] = useState<Partner[]>([]); // Assuming partners API exists
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
 
-  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
-  const [isSaleDialogOpen, setIsSaleDialogOpen] = useState(false);
+  const totalPages = Math.ceil(total / limit);
 
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [sellingProduct, setSellingProduct] = useState<Product | null>(null);
-
-  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-
-  const [activeTab, setActiveTab] = useState("active");
-  const [searchTerm, setSearchTerm] = useState("");
-  const { toast } = useToast();
-
-  // --- Data Fetching and State Management ---
-
-  const fetchAllData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [productRes, transactionRes, partnerRes] = await Promise.all([
-        fetch("/api/products"),
-        fetch("/api/transactions"),
-        fetch("/api/partners"),
-      ]);
-
-      const productData = await productRes.json();
-      setProducts(productData.products || []);
-
-      const transactionData = await transactionRes.json();
-      setTransactions(transactionData.transactions || []);
-
-      const partnerData = await partnerRes.json();
-      setPartners(partnerData.partners || []);
-    } catch (error) {
-      console.error("Inventory Data Fetch Error:", error);
-      toast({
-        title: "Data Error",
-        description:
-          "Failed to load inventory, transactions, or partners data.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
-
-  // Helper to add a partner if not exists (used during sale submission)
-  const addPartnerIfNotExist = async (name: string, phone: string) => {
-    const existingPartner = partners.find(
-      (p) => p.name === name || p.phone === phone
-    );
-    if (existingPartner) return existingPartner;
-
-    try {
-      const res = await fetch("/api/partners", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Default to 'individual' type, assuming a sale to an unknown buyer
-        body: JSON.stringify({ name, phone, type: "individual" }),
-      });
-      const result = await res.json();
-      if (res.ok) {
-        const newPartner: Partner = {
-          id: result.id,
-          name,
-          phone,
-          type: "individual",
-          created_at: new Date().toISOString(),
-        };
-        setPartners((prev) => [...prev, newPartner]);
-        return newPartner;
-      } else {
-        throw new Error(result.message || "Failed to create new partner.");
-      }
-    } catch (error) {
-      console.error("Partner creation error:", error);
-      toast({
-        title: "Partner Error",
-        description: "Failed to create new partner.",
-        variant: "destructive",
-      });
-      return null;
-    }
-  };
-
-  // --- Form Setup ---
-
-  const productForm = useForm<z.infer<typeof productSchema>>({
-    resolver: zodResolver(productSchema),
-    defaultValues: {
-      type: "sku",
-      name: "",
-      category: "",
-      stock: 0,
-      price: 0,
-      imei: "",
-      lentTo: "",
-    },
-  });
-
-  // Dynamic validation for sale quantity based on stock
-  const saleFormWithStockValidation = saleSchema.refine(
-    (data) => {
-      if (sellingProduct?.type === "sku") {
-        return data.quantity <= (sellingProduct?.stock || 0);
-      }
-      return true;
-    },
-    {
-      message: "Cannot sell more than available in stock.",
-      path: ["quantity"],
-    }
+  // Tab State
+  const [activeTab, setActiveTab] = useState<"active" | "lent" | "movements">(
+    "active"
   );
 
-  const saleFormValidated = useForm<z.infer<typeof saleSchema>>({
-    resolver: zodResolver(saleFormWithStockValidation),
-    defaultValues: {
-      buyerName: "",
-      buyerPhone: "",
-      sellingPrice: 0,
-      quantity: 1,
-    },
-  });
+  // Product Modal State
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
+  const [productFormData, setProductFormData] = useState<ProductFormData>(
+    initialProductFormData
+  );
 
-  const productType = productForm.watch("type");
+  // Transaction Modal State
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [transactionProduct, setTransactionProduct] = useState<Product | null>(
+    null
+  );
+  const [transactionFormData, setTransactionFormData] =
+    useState<TransactionFormData>(initialTransactionFormData);
 
-  // Sync Form with Editing Product
-  useEffect(() => {
-    if (editingProduct) {
-      const activeTransaction = transactions.find(
-        (t) => t.productId === editingProduct.id && t.type === "lend-out"
-      );
+  // Delete Confirmation State
+  const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] =
+    useState(false);
+  const [productToDeleteId, setProductToDeleteId] = useState<string | null>(
+    null
+  );
 
-      productForm.reset({
-        type: editingProduct.type,
-        name: editingProduct.name,
-        category: editingProduct.category,
-        price: editingProduct.price,
-        stock: editingProduct.stock,
-        imei: editingProduct.imei,
-        lentTo:
-          activeTransaction?.type === "lend-out" ? activeTransaction.party : "",
-      });
-    } else {
-      productForm.reset({
-        type: "sku",
-        name: "",
-        category: "",
-        stock: 0,
-        price: 0,
-        imei: "",
-        lentTo: "",
-      });
-    }
-  }, [editingProduct, productForm, transactions]);
+  // --- Data Fetching ---
 
-  // Sync Sale Form with Selling Product
-  useEffect(() => {
-    if (sellingProduct) {
-      saleFormValidated.reset({
-        sellingPrice: sellingProduct.price, // Default selling price to cost price (can be changed by user)
-        buyerName: "",
-        buyerPhone: "",
-        quantity: 1,
-      });
-    }
-  }, [sellingProduct, saleFormValidated]);
-
-  // Enforce 'individual' stock constraint on type change
-  useEffect(() => {
-    if (productType === "individual" && !editingProduct) {
-      productForm.setValue("stock", 1);
-    } else if (productType === "sku" && !editingProduct) {
-      if (productForm.getValues("stock") === 1) {
-        productForm.setValue("stock", 0);
-      }
-    }
-  }, [productType, productForm, editingProduct]);
-
-  // --- Data Filtering Logic ---
-
-  const filteredProducts = useMemo(() => {
-    const partnerMap = new Map(partners.map((p) => [p.name, p]));
-    const productMap = new Map(products.map((p) => [p.id, p]));
-
-    if (activeTab === "active") {
-      // 1. Filter out lent products
-      const lentOutProductIds = new Set(
-        transactions
-          .filter((t) => t.type === "lend-out")
-          .map((t) => t.productId)
-      );
-      let activeProducts = products.filter(
-        (p) => p.stock > 0 && !lentOutProductIds.has(p.id)
-      );
-
-      // 2. Apply search filter
-      if (searchTerm) {
-        activeProducts = activeProducts.filter(
-          (p) =>
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (p.imei && p.imei.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      }
-      return activeProducts;
-    }
-
-    if (activeTab === "sold") {
-      // 1. Get all sale transactions
-      let soldTransactions = transactions
-        .filter((t) => t.type === "sale")
-        .map((t) => {
-          const product = productMap.get(t.productId);
-          const partner = partnerMap.get(t.party);
-          return { ...t, product, partner };
-        })
-        .filter((t): t is EnrichedTransaction => !!t.product); // Ensure product still exists
-
-      // 2. Apply search filter
-      if (searchTerm) {
-        soldTransactions = soldTransactions.filter(
-          (t) =>
-            t.product?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (t.product?.imei &&
-              t.product.imei.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      }
-      return soldTransactions;
-    }
-
-    if (activeTab === "lent") {
-      // 1. Get all lend-out transactions and enrich with product/partner data
-      let lentProducts: EnrichedProduct[] = transactions
-        .filter((t) => t.type === "lend-out")
-        .map((t) => {
-          const product = productMap.get(t.productId);
-          if (!product) return null;
-          const partner = partnerMap.get(t.party);
-          return { ...product, transaction: t, partner };
-        })
-        .filter((p): p is EnrichedProduct => p !== null);
-
-      // 2. Apply search filter
-      if (searchTerm) {
-        lentProducts = lentProducts.filter(
-          (p) =>
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (p.imei && p.imei.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      }
-      return lentProducts;
-    }
-
-    return [];
-  }, [activeTab, searchTerm, products, transactions, partners]);
-
-  // --- Handler Functions (API calls) ---
-
-  const handleAddNew = () => {
-    setEditingProduct(null);
-    setIsProductDialogOpen(true);
-  };
-
-  const handleEdit = (product: Product) => {
-    setEditingProduct(product);
-    setIsProductDialogOpen(true);
-  };
-
-  const handleSell = (product: Product) => {
-    setSellingProduct(product);
-    setIsSaleDialogOpen(true);
-  };
-
-  const handleDelete = (product: Product) => {
-    setProductToDelete(product);
-    setIsDeleteAlertOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!productToDelete) return;
-
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/products?id=${productToDelete.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        toast({
-          title: "Product Deleted",
-          description: `${productToDelete.name} and its related data have been removed.`,
-          variant: "destructive",
-        });
-        // Refresh all data to ensure state consistency
-        fetchAllData();
-      } else {
-        const result = await res.json();
-        throw new Error(result.message || "Failed to delete product.");
+      const res =
+        activeTab === "active"
+          ? await fetch(
+              `/api/products?q=${encodeURIComponent(
+                search
+              )}&page=${page}&limit=${limit}`
+            )
+          : activeTab === "movements"
+          ? await fetch(
+              `/api/transactions?q=${encodeURIComponent(
+                search
+              )}&page=${page}&limit=${limit}`
+            )
+          : null;
+      if (res) {
+        const data = await res.json();
+        if (res.ok) {
+          activeTab === "active"
+            ? setProducts(data.products || [])
+            : setTransactions(data.transactions || []);
+          setTotal(data.total);
+        } else {
+          setError(data.message || "Failed to fetch products.");
+        }
       }
-    } catch (error) {
-      console.error("Delete failed:", error);
-      toast({
-        title: "Deletion Failed",
-        description: "Could not remove the product. Check server logs.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleteAlertOpen(false);
-      setProductToDelete(null);
+    } catch (err) {
+      setError("Network error fetching products.");
     }
-  };
+  }, [activeTab, page, search]);
 
-  const handleReturnLentItem = async (productId: string) => {
-    const lentTransaction = transactions.find(
-      (t) => t.productId === productId && t.type === "lend-out"
+  const fetchPartners = useCallback(async () => {
+    // NOTE: Assuming this API returns Partners data
+    try {
+      const response = await fetch("/api/partners");
+      const result = await response.json();
+      if (response.ok) {
+        setPartners(result.partners || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch partners:", err);
+      // NOTE: Failing partner fetch shouldn't block the app, so only logging error.
+    }
+  }, []);
+
+  const refreshAllData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([fetchData(), fetchPartners()]);
+    setLoading(false);
+  }, [fetchData]);
+
+  useEffect(() => {
+    refreshAllData();
+  }, [refreshAllData]);
+
+  // Reset message/error after a delay
+  useEffect(() => {
+    if (message || error) {
+      const timer = setTimeout(() => {
+        setMessage("");
+        setError("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message, error]);
+
+  // --- Product CRUD Handlers ---
+
+  const openProductModal = (product: Product | null = null) => {
+    setCurrentProduct(product);
+    setProductFormData(
+      product
+        ? {
+            name: product.name,
+            category: product.category,
+            price: product.price,
+            stock: product.stock,
+            type: product.type,
+            imei: product.imei || "",
+          }
+        : initialProductFormData
     );
-    if (!lentTransaction) {
-      return toast({
-        title: "Error",
-        description: "Lent item transaction not found.",
-        variant: "destructive",
-      });
-    }
-
-    try {
-      // 1. Delete the lend-out transaction to mark it as returned/active
-      const res = await fetch(`/api/transactions?id=${lentTransaction.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        toast({
-          title: "Product Returned",
-          description: "The product is now marked as active.",
-        });
-        // Optimistically remove the transaction from state
-        setTransactions((prev) =>
-          prev.filter((t) => t.id !== lentTransaction.id)
-        );
-      } else {
-        const result = await res.json();
-        throw new Error(
-          result.message || "Failed to delete lend-out transaction."
-        );
-      }
-    } catch (error) {
-      console.error("Return failed:", error);
-      toast({
-        title: "Return Error",
-        description: "Could not mark product as returned. Check server logs.",
-        variant: "destructive",
-      });
-    }
+    setIsProductModalOpen(true);
   };
 
-  async function onProductSubmit(values: z.infer<typeof productSchema>) {
-    const isNewProduct = !editingProduct;
-    let productId = editingProduct?.id;
-    let newLentParty = values.lentTo;
-    let oldLentTransaction: Transaction | undefined;
+  const closeProductModal = () => {
+    setIsProductModalOpen(false);
+    setCurrentProduct(null);
+    setProductFormData(initialProductFormData);
+  };
+
+  const handleDeleteClick = (product: Product) => {
+    setProductToDeleteId(product.id);
+    setIsConfirmDeleteModalOpen(true);
+  };
+
+  const handleProductSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const isEditing = !!currentProduct;
+    const url = isEditing
+      ? `/api/products?id=${currentProduct.id}`
+      : "/api/products";
+    const method = isEditing ? "PUT" : "POST";
+
+    // Basic validation and type conversion
+    const priceValue = parseFloat(productFormData.price.toString());
+    let stockValue = parseInt(productFormData.stock.toString(), 10);
+    const isIndividual = productFormData.type === "individual";
+
+    if (isIndividual) {
+      stockValue = 1; // Force stock to 1 for individual products
+    }
+
+    if (
+      isNaN(priceValue) ||
+      isNaN(stockValue) ||
+      priceValue < 0 ||
+      stockValue < 0
+    ) {
+      setError("Price and Stock must be valid non-negative numbers.");
+      setLoading(false);
+      return;
+    }
 
     try {
-      // --- 1. HANDLE PRODUCT CRUD ---
-      let productRes: Response;
-      let method = isNewProduct ? "POST" : "PUT";
-      let apiUrl = isNewProduct
-        ? "/api/products"
-        : `/api/products?id=${productId}`;
-
-      if (!isNewProduct) {
-        oldLentTransaction = transactions.find(
-          (t) => t.productId === productId && t.type === "lend-out"
-        );
-      }
-
-      const productPayload = {
-        type: values.type,
-        name: values.name,
-        category: values.category,
-        // Enforce stock=1 for individual products based on schema
-        stock: values.type === "individual" ? 1 : values.stock,
-        price: values.price,
-        imei: values.imei,
+      const payload = {
+        ...productFormData,
+        price: priceValue,
+        stock: stockValue,
+        imei: isIndividual ? productFormData.imei || null : null,
       };
 
-      productRes = await fetch(apiUrl, {
+      const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productPayload),
+        body: JSON.stringify(payload),
       });
 
-      const productResult = await productRes.json();
-      if (!productRes.ok) {
-        throw new Error(
-          productResult.message ||
-            `Failed to ${isNewProduct ? "add" : "update"} product.`
+      const result = await response.json();
+      if (response.ok) {
+        setMessage(`Product ${isEditing ? "updated" : "added"} successfully.`);
+        closeProductModal();
+        fetchData(); // Refresh only product list
+      } else {
+        setError(
+          result.message || `Failed to ${isEditing ? "update" : "add"} product.`
         );
       }
-
-      if (isNewProduct) {
-        productId = productResult.id;
-      }
-
-      // --- 2. HANDLE LEND-OUT TRANSACTION UPDATES (Only if product is individual/unique) ---
-
-      if (values.type === "individual" && productId) {
-        // Scenario 1: Product was lent, now it's not (or lent to someone else)
-        if (oldLentTransaction && oldLentTransaction.party !== newLentParty) {
-          const deleteRes = await fetch(
-            `/api/transactions?id=${oldLentTransaction.id}`,
-            { method: "DELETE" }
-          );
-          if (!deleteRes.ok)
-            throw new Error("Failed to remove old lend-out transaction.");
-          // Optimistically remove
-          setTransactions((prev) =>
-            prev.filter((t) => t.id !== oldLentTransaction!.id)
-          );
-        }
-
-        // Scenario 2: Product is newly lent or lent to a different partner
-        if (
-          newLentParty &&
-          (!oldLentTransaction || oldLentTransaction.party !== newLentParty)
-        ) {
-          // Ensure partner exists before creating transaction
-          const partner = await addPartnerIfNotExist(
-            newLentParty,
-            "0000000000"
-          );
-          if (!partner)
-            throw new Error("Could not log lend-out due to partner error.");
-
-          const transactionPayload = {
-            productId: productId,
-            type: "lend-out",
-            quantity: 1,
-            price: 0,
-            totalAmount: 0,
-            date: new Date().toISOString(),
-            party: newLentParty,
-          };
-
-          const txRes = await fetch("/api/transactions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(transactionPayload),
-          });
-          const txResult = await txRes.json();
-          if (!txRes.ok)
-            throw new Error(
-              txResult.message || "Failed to create new lend-out transaction."
-            );
-
-          // Optimistically update state
-          setTransactions((prev) => [
-            ...prev.filter((t) => t.id !== oldLentTransaction?.id),
-            { ...transactionPayload, id: txResult.id } as Transaction,
-          ]);
-          toast({
-            title: "Product Lent",
-            description: `Logged lend-out for ${values.name} to ${newLentParty}.`,
-          });
-        }
-      }
-
-      // --- 3. FINAL STATE UPDATE & TOAST ---
-      toast({
-        title: isNewProduct ? "Product Added" : "Product Updated",
-        description: `${values.name} has been ${
-          isNewProduct ? "added" : "updated"
-        }.`,
-      });
-
-      // Full refresh is safer after complex operations affecting multiple tables
-      fetchAllData();
-
-      setIsProductDialogOpen(false);
-      setEditingProduct(null);
-    } catch (error) {
-      const err = error as Error;
-      console.error("Product submission failed:", err);
-      toast({
-        title: "Submission Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+    } catch (err) {
+      setError("Network error during product save.");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  async function onSaleSubmit(values: z.infer<typeof saleSchema>) {
-    if (!sellingProduct) return;
+  // -------------------------
+  // Delete Confirmation Logic
+  // -------------------------
+
+  const handleConfirmDelete = async () => {
+    if (!productToDeleteId) return;
+
+    setLoading(true);
+    setError("");
+    setIsConfirmDeleteModalOpen(false); // Close modal immediately
 
     try {
-      // --- 1. ENSURE PARTNER EXISTS ---
-      const partner = await addPartnerIfNotExist(
-        values.buyerName,
-        values.buyerPhone
-      );
-      if (!partner) return;
+      const response = await fetch(`/api/products?id=${productToDeleteId}`, {
+        method: "DELETE",
+      });
+      const result = await response.json();
 
-      const quantitySold =
-        sellingProduct.type === "individual" ? 1 : values.quantity;
-      const totalAmount = values.sellingPrice * quantitySold;
-
-      if (sellingProduct.stock < quantitySold) {
-        toast({
-          title: "Sale Error",
-          description: "Stock check failed. Not enough units available.",
-          variant: "destructive",
-        });
-        return;
+      if (response.ok) {
+        setMessage("Product and related transactions deleted successfully.");
+        refreshAllData(); // Refresh both products and transactions
+      } else {
+        setError(result.message || "Failed to delete product.");
       }
+    } catch (err) {
+      setError("Network error during product deletion.");
+    } finally {
+      setLoading(false);
+      setProductToDeleteId(null);
+    }
+  };
 
-      // --- 2. LOG TRANSACTION ---
+  const closeConfirmDeleteModal = () => {
+    setIsConfirmDeleteModalOpen(false);
+    setProductToDeleteId(null);
+  };
+
+  // --- Transaction Handlers ---
+
+  const openTransactionModal = (
+    product: Product,
+    type: Transaction["type"]
+  ) => {
+    setTransactionProduct(product);
+
+    let defaultPartnerId = "";
+    let defaultPartyName = "";
+
+    // If transaction is related to a partner (lend-out, return, purchase), default to the first one available
+    if (
+      (type === "lend-out" || type === "return" || type === "purchase") &&
+      partners.length > 0
+    ) {
+      defaultPartnerId = partners[0].id;
+      defaultPartyName = partners[0].name;
+    }
+
+    setTransactionFormData({
+      ...initialTransactionFormData,
+      type,
+      partnerId: defaultPartnerId,
+      partyName: defaultPartyName,
+      quantity: 1, // Default to 1
+    });
+    setIsTransactionModalOpen(true);
+  };
+
+  const closeTransactionModal = () => {
+    setIsTransactionModalOpen(false);
+    setTransactionProduct(null);
+    setTransactionFormData(initialTransactionFormData);
+  };
+
+  // Updates partyName when partnerId changes for transactions involving partners
+  useEffect(() => {
+    const isPartnerTransaction =
+      transactionFormData.type === "lend-out" ||
+      transactionFormData.type === "return" ||
+      transactionFormData.type === "purchase";
+
+    if (transactionProduct && isPartnerTransaction) {
+      const selectedPartner = partners.find(
+        (p) => p.id === transactionFormData.partnerId
+      );
+      if (selectedPartner) {
+        setTransactionFormData((prev) => ({
+          ...prev,
+          partyName: selectedPartner.name,
+        }));
+      }
+    }
+  }, [
+    transactionFormData.partnerId,
+    transactionFormData.type,
+    partners,
+    transactionProduct,
+  ]);
+
+  const handleTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!transactionProduct) return;
+
+    setLoading(true);
+    setError("");
+
+    const quantity = parseInt(transactionFormData.quantity.toString(), 10);
+    const productPrice = transactionProduct.price;
+    const isIncoming =
+      transactionFormData.type === "return" ||
+      transactionFormData.type === "purchase";
+    const isOutgoing =
+      transactionFormData.type === "lend-out" ||
+      transactionFormData.type === "sale";
+
+    if (isNaN(quantity) || quantity <= 0) {
+      setError("Quantity must be a positive number.");
+      setLoading(false);
+      return;
+    }
+
+    // Stock check for outgoing transactions
+    if (isOutgoing && quantity > transactionProduct.stock) {
+      setError(
+        `Cannot process: Only ${transactionProduct.stock} units are currently in stock.`
+      );
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // 1. Calculate new stock and total amount
+      const stockChange = isIncoming ? quantity : -quantity;
+      const newStock = transactionProduct.stock + stockChange;
+      const totalAmount = productPrice * quantity; // Total amount is calculated based on current price * quantity
+
+      // 2. POST the Transaction
       const transactionPayload = {
-        productId: sellingProduct.id,
-        type: "sale",
-        quantity: quantitySold,
-        price: values.sellingPrice,
+        productId: transactionProduct.id,
+        type: transactionFormData.type,
+        quantity: quantity,
+        price: productPrice,
         totalAmount: totalAmount,
-        date: new Date().toISOString(),
-        party: partner.name,
+        date: transactionFormData.date,
+        party: transactionFormData.partyName,
+        partnerId: transactionFormData.partnerId || "CUSTOMER", // Use a placeholder if not a partner transaction
       };
 
-      const txRes = await fetch("/api/transactions", {
+      const transResponse = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(transactionPayload),
       });
-      const txResult = await txRes.json();
-      if (!txRes.ok) {
-        throw new Error(
-          txResult.message || "Failed to record sale transaction."
-        );
+      const transResult = await transResponse.json();
+
+      if (!transResponse.ok) {
+        setError(transResult.message || "Failed to record transaction.");
+        setLoading(false);
+        return;
       }
 
-      // --- 3. UPDATE PRODUCT STOCK ---
-      const newStock = sellingProduct.stock - quantitySold;
+      // 3. PUT the updated Product Stock
       const stockUpdatePayload = {
-        name: sellingProduct.name,
-        type: sellingProduct.type,
-        category: sellingProduct.category,
-        price: sellingProduct.price,
-        imei: sellingProduct.imei,
+        // Only sending required fields for PUT API
+        name: transactionProduct.name,
+        category: transactionProduct.category,
+        type: transactionProduct.type,
+        price: transactionProduct.price,
         stock: newStock,
+        imei: transactionProduct.imei,
       };
 
-      const productUpdateRes = await fetch(
-        `/api/products?id=${sellingProduct.id}`,
+      const productResponse = await fetch(
+        `/api/products?id=${transactionProduct.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -689,786 +945,777 @@ export default function InventoryPage() {
         }
       );
 
-      if (!productUpdateRes.ok) {
-        throw new Error("Failed to update product stock after sale.");
+      if (!productResponse.ok) {
+        console.error(
+          "Failed to update product stock after transaction:",
+          await productResponse.json()
+        );
+        setMessage(
+          "Transaction recorded, but stock update failed. Please check product record."
+        );
+      } else {
+        setMessage(
+          `${
+            transactionFormData.type.charAt(0).toUpperCase() +
+            transactionFormData.type.slice(1)
+          } recorded successfully! Stock updated.`
+        );
       }
 
-      // --- 4. FINAL STATE UPDATE & TOAST ---
-      toast({
-        title: "Product Sold!",
-        description: `${sellingProduct.name} (x${quantitySold}) sold to ${partner.name}.`,
-      });
-
-      // Full refresh is safest after a sale that impacts two tables
-      fetchAllData();
-
-      setIsSaleDialogOpen(false);
-      setSellingProduct(null);
-    } catch (error) {
-      const err = error as Error;
-      console.error("Sale failed:", err);
-      toast({
-        title: "Sale Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      closeTransactionModal();
+      refreshAllData(); // Refresh both products and transactions
+    } catch (err) {
+      setError("A network error occurred during the transaction.");
+    } finally {
+      setLoading(false);
     }
-  }
-
-  // --- Utility Renderers ---
-
-  const getStockStatus = (stock: number) => {
-    if (stock === 0) return <Badge variant="destructive">Out of Stock</Badge>;
-    if (stock < 10 && stock > 0)
-      return (
-        <Badge
-          variant="secondary"
-          className="bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200"
-        >
-          Low Stock
-        </Badge>
-      );
-    return <Badge variant="secondary">In Stock</Badge>;
   };
 
-  // Renders partner details for Lent tab
-  const PartnerCell = ({ partner }: { partner?: Partner }) => {
-    if (!partner)
-      return (
-        <TableCell className="text-muted-foreground">N/A (Deleted)</TableCell>
-      );
+  // --- Render Functions ---
 
-    const initials = partner.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase();
-
+  /** Renders the form for adding/editing a product. */
+  const renderProductForm = () => {
+    const isIndividual = productFormData.type === "individual";
     return (
-      <TableCell>
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="text-xs">
-              {initials.substring(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <span className="font-medium">{partner.name}</span>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {partner.type === "shop" ? (
-                <Building className="h-3 w-3" />
-              ) : (
-                <User className="h-3 w-3" />
-              )}
-              <span>{partner.shop_name ?? "Individual"}</span>
-            </div>
+      <form onSubmit={handleProductSave} className="space-y-4">
+        {/* Name and Category */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Product Name
+            </label>
+            <input
+              type="text"
+              value={productFormData.name}
+              onChange={(e) =>
+                setProductFormData({ ...productFormData, name: e.target.value })
+              }
+              required
+              placeholder="E.g., Ultra Fast Charger"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
-        </div>
-      </TableCell>
-    );
-  };
-
-  // Renders buyer details for Sold tab
-  const SoldToCell = ({ partner }: { partner?: Partner }) => {
-    if (!partner)
-      return (
-        <TableCell className="text-muted-foreground">N/A (Deleted)</TableCell>
-      );
-
-    const initials = partner.name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase();
-
-    return (
-      <TableCell>
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="text-xs">
-              {initials.substring(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <span className="font-medium">{partner.name}</span>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Phone className="h-3 w-3" />
-              <span>{partner.phone}</span>
-            </div>
-          </div>
-        </div>
-      </TableCell>
-    );
-  };
-
-  const renderActiveTable = () => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Product Name</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead>Stock</TableHead>
-          <TableHead>Cost Price</TableHead>
-          <TableHead>IMEI</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>
-            <span className="sr-only">Actions</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {(filteredProducts as Product[]).map((product) => (
-          <TableRow key={product.id}>
-            <TableCell className="font-medium">{product.name}</TableCell>
-            <TableCell>
-              <Badge
-                variant={
-                  product.type === "individual" ? "outline" : "secondary"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Category
+            </label>
+            <div className="relative">
+              <select
+                value={productFormData.category}
+                onChange={(e) =>
+                  setProductFormData({
+                    ...productFormData,
+                    category: e.target.value,
+                  })
                 }
-                className="gap-1 capitalize"
+                required
+                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
               >
-                <Package className="h-3 w-3" />
-                {product.type}
-              </Badge>
-            </TableCell>
-            <TableCell>{product.category}</TableCell>
-            <TableCell>{product.stock}</TableCell>
-            <TableCell>${product.price.toFixed(2)}</TableCell>
-            <TableCell className="font-mono text-xs text-muted-foreground">
-              {product.imei || "-"}
-            </TableCell>
-            <TableCell>{getStockStatus(product.stock)}</TableCell>
-            <TableCell className="text-right">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => handleSell(product)}
-                    disabled={product.stock === 0}
-                  >
-                    Sell
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleEdit(product)}>
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => handleDelete(product)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
+                {INVENTORY_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
 
-  const renderSoldTable = () => {
-    const getProfitClassName = (profit: number) => {
-      if (profit > 0) return "text-green-600 font-semibold";
-      if (profit < 0) return "text-red-600 font-semibold";
-      return "text-muted-foreground";
-    };
+        {/* Type and Price */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pricing/Tracking Type
+            </label>
+            <div className="relative">
+              <select
+                value={productFormData.type}
+                onChange={(e) =>
+                  setProductFormData({
+                    ...productFormData,
+                    type: e.target.value as Product["type"],
+                    imei: "",
+                  })
+                }
+                disabled={!!currentProduct} // Disable changing type when editing
+                required
+                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="sku">SKU (Stock Keeping Unit)</option>
+                <option value="individual">Individual (Tracked by IMEI)</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Price (USD)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={productFormData.price}
+              onChange={(e) =>
+                setProductFormData({
+                  ...productFormData,
+                  price: parseFloat(e.target.value) || 0,
+                })
+              }
+              required
+              placeholder="0.00"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
 
-    return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Product Name</TableHead>
-            <TableHead>Type/Qty</TableHead>
-            <TableHead>Sold To</TableHead>
-            <TableHead>Selling Date</TableHead>
-            <TableHead>IMEI</TableHead>
-            <TableHead className="text-right">Total Cost</TableHead>
-            <TableHead className="text-right">Total Revenue</TableHead>
-            <TableHead className="text-right">Profit</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(filteredProducts as EnrichedTransaction[]).map((t) => {
-            if (!t.product) return null;
+        {/* Stock and IMEI */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Stock Quantity
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={isIndividual ? 1 : productFormData.stock}
+              onChange={(e) =>
+                setProductFormData({
+                  ...productFormData,
+                  stock: parseInt(e.target.value, 10) || 0,
+                })
+              }
+              required
+              disabled={isIndividual}
+              placeholder="0"
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm ${
+                isIndividual
+                  ? "bg-gray-100 cursor-not-allowed"
+                  : "focus:ring-blue-500 focus:border-blue-500"
+              }`}
+            />
+          </div>
+          {isIndividual && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                IMEI / Serial Number
+              </label>
+              <input
+                type="text"
+                value={productFormData.imei}
+                onChange={(e) =>
+                  setProductFormData({
+                    ...productFormData,
+                    imei: e.target.value,
+                  })
+                }
+                placeholder="Optional but recommended"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          )}
+        </div>
 
-            const quantity = t.quantity;
-            const totalSoldPrice = t.totalAmount;
-            const totalPurchasePrice = (t.product.price || 0) * quantity;
-            const profit = totalSoldPrice - totalPurchasePrice;
-
-            return (
-              <TableRow key={t.id}>
-                <TableCell className="font-medium">{t.product.name}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      t.product.type === "individual" ? "outline" : "secondary"
-                    }
-                    className="gap-1 capitalize"
-                  >
-                    {t.product.type} (x{t.quantity})
-                  </Badge>
-                </TableCell>
-                <SoldToCell partner={t.partner} />
-                <TableCell>
-                  {format(new Date(t.date), "MMM d, yyyy, h:mm a")}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {t.product.imei || "-"}
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  ${totalPurchasePrice.toFixed(2)}
-                </TableCell>
-                <TableCell className="text-right font-medium text-blue-600">
-                  ${totalSoldPrice.toFixed(2)}
-                </TableCell>
-                <TableCell
-                  className={`text-right ${getProfitClassName(profit)}`}
-                >
-                  ${profit.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={closeProductModal}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 transition duration-150 flex items-center justify-center"
+            disabled={loading}
+          >
+            {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
+            {currentProduct ? "Update Product" : "Add Product"}
+          </button>
+        </div>
+      </form>
     );
   };
 
-  const renderLentTable = () => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Product Name</TableHead>
-          <TableHead>Partner</TableHead>
-          <TableHead>Lent Date</TableHead>
-          <TableHead>IMEI</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {(filteredProducts as EnrichedProduct[]).map(
-          ({ id, name, transaction, partner, imei }) => (
-            <TableRow key={id}>
-              <TableCell className="font-medium">{name}</TableCell>
-              <PartnerCell partner={partner} />
-              <TableCell>
-                {transaction
-                  ? format(new Date(transaction.date), "MMM d, yyyy, h:mm a")
-                  : "N/A"}
-              </TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {imei || "-"}
-              </TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleReturnLentItem(id)}
-                >
-                  Mark as Active
-                </Button>
-              </TableCell>
-            </TableRow>
-          )
-        )}
-      </TableBody>
-    </Table>
-  );
+  /** Renders the form for recording a transaction. */
+  const renderTransactionForm = () => {
+    if (!transactionProduct) return null;
 
-  return (
-    <>
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-800">
-              Inventory Management
-            </h1>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by Name or IMEI..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+    const { type, quantity, partnerId } = transactionFormData;
+
+    const isSale = type === "sale";
+    const isLendOut = type === "lend-out";
+    const isReturn = type === "return";
+    const isPurchase = type === "purchase";
+
+    const isIndividualProduct = transactionProduct.type === "individual";
+
+    const actionText = isSale
+      ? "Sell"
+      : isLendOut
+      ? "Lend Out"
+      : isReturn
+      ? "Record Return"
+      : "Record Stock-In (Purchase)";
+
+    const partnerRequired = isLendOut || isReturn || isPurchase;
+    const isOutgoing = isSale || isLendOut;
+
+    const currentStock = transactionProduct.stock;
+    const currentPrice = transactionProduct.price;
+
+    // Use price if set, otherwise 0 to prevent NaN
+    const calculatedTotal = currentPrice * (quantity || 0);
+
+    const transactionTypes = isIndividualProduct
+      ? [
+          {
+            type: "sale" as const,
+            label: "Sale (Outgoing)",
+            icon: DollarSign,
+            color: "bg-red-600 hover:bg-red-700",
+          },
+          {
+            type: "lend-out" as const,
+            label: "Lend Out (Outgoing)",
+            icon: Zap,
+            color: "bg-indigo-600 hover:bg-indigo-700",
+          },
+          {
+            type: "return" as const,
+            label: "Return (Incoming)",
+            icon: Repeat,
+            color: "bg-blue-600 hover:bg-blue-700",
+          },
+        ]
+      : [
+          {
+            type: "sale" as const,
+            label: "Sale (Outgoing)",
+            icon: DollarSign,
+            color: "bg-red-600 hover:bg-red-700",
+          },
+        ];
+
+    const isQuantityDisabled = isIndividualProduct;
+    const maxQuantity = isOutgoing ? currentStock : 9999;
+
+    // Partner selection options
+    const partnerOptions = partners.map((p) => ({
+      id: p.id,
+      name: p.shop_name ? `${p.shop_name} (${p.name})` : p.name,
+    }));
+
+    // If it's an individual item transaction (Lend or Return), force quantity to 1
+    if (isQuantityDisabled) {
+      transactionFormData.quantity = 1;
+    }
+
+    return (
+      <form onSubmit={handleTransaction} className="space-y-6">
+        {/* Product Summary */}
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="text-xl font-bold text-gray-900">
+            {transactionProduct.name}
+          </h4>
+          {isIndividualProduct && transactionProduct.imei && (
+            <p className="text-sm text-gray-500 mt-1">
+              IMEI: {transactionProduct.imei}
+            </p>
+          )}
+          <p className="text-sm text-gray-600 mt-1">
+            Current Stock:{" "}
+            <span
+              className={`font-bold ${
+                currentStock === 0 ? "text-red-500" : "text-green-600"
+              }`}
+            >
+              {currentStock}
+            </span>{" "}
+            | Price: {formatCurrency(currentPrice)}
+          </p>
+        </div>
+
+        {/* Transaction Type Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Movement Type
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {transactionTypes.map((t) => (
+              <button
+                key={t.type}
+                type="button"
+                onClick={() =>
+                  setTransactionFormData((prev) => ({ ...prev, type: t.type }))
+                }
+                className={`p-3 text-center rounded-lg border-2 font-semibold transition ${
+                  type === t.type
+                    ? `${t.color} text-white border-transparent shadow-lg`
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <t.icon className="w-5 h-5 mx-auto mb-1" />
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Partner Selection (Required for Purchase, Lend Out, Return) */}
+        {partnerRequired ? (
+          <div>
+            <label
+              htmlFor="partnerId"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Partner / Party Involved
+            </label>
+            <div className="relative">
+              <select
+                id="partnerId"
+                value={partnerId}
+                onChange={(e) =>
+                  setTransactionFormData({
+                    ...transactionFormData,
+                    partnerId: e.target.value,
+                  })
+                }
+                required
+                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
+              >
+                {partnerOptions.length > 0 ? (
+                  partnerOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>
+                    No partners available (Try refreshing)
+                  </option>
+                )}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1">
+            <div>
+              <label
+                htmlFor="customerName"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Customer / Party Name
+              </label>
+              <input
+                id="customerName"
+                type="text"
+                placeholder="E.g., John Doe"
+                value={transactionFormData.partyName}
+                onChange={(e) =>
+                  setTransactionFormData({
+                    ...transactionFormData,
+                    partyName: e.target.value,
+                  })
+                }
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
               />
             </div>
           </div>
-          <Button
-            onClick={handleAddNew}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 transition-colors"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Product
-          </Button>
+        )}
+
+        {/* Quantity and Date */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="quantity"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Quantity
+            </label>
+            <input
+              id="quantity"
+              type="number"
+              min={1}
+              max={maxQuantity}
+              value={quantity}
+              onChange={(e) =>
+                setTransactionFormData({
+                  ...transactionFormData,
+                  quantity: parseInt(e.target.value, 10) || 0,
+                })
+              }
+              required
+              disabled={isQuantityDisabled}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                isQuantityDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+              }`}
+            />
+            {isQuantityDisabled && (
+              <p className="text-xs text-gray-500 mt-1">
+                Individual items are tracked one-by-one (Quantity forced to 1).
+              </p>
+            )}
+            {isOutgoing && quantity > currentStock && (
+              <p className="text-xs text-red-500 mt-1">
+                Warning: Quantity exceeds stock!
+              </p>
+            )}
+          </div>
+          <div>
+            <label
+              htmlFor="date"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Transaction Date
+            </label>
+            <input
+              id="date"
+              type="date"
+              value={transactionFormData.date}
+              onChange={(e) =>
+                setTransactionFormData({
+                  ...transactionFormData,
+                  date: e.target.value,
+                })
+              }
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="sold">Sold</TabsTrigger>
-            <TabsTrigger value="lent">Lent</TabsTrigger>
-          </TabsList>
-          <TabsContent value="active">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle>Active Products in Stock</CardTitle>
-                <CardDescription>
-                  Products currently available for sale or lending.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="text-center py-12 text-blue-500 flex justify-center items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" /> Loading active
-                    inventory...
-                  </div>
-                ) : filteredProducts.length > 0 ? (
-                  renderActiveTable()
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    No active products found matching your criteria.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="sold">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle>Sold Products Log</CardTitle>
-                <CardDescription>
-                  A log of all products that have been sold and the profit
-                  realized.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="text-center py-12 text-blue-500 flex justify-center items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" /> Loading sales
-                    history...
-                  </div>
-                ) : filteredProducts.length > 0 ? (
-                  renderSoldTable()
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    No sold products found.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="lent">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle>Lent Products Tracker</CardTitle>
-                <CardDescription>
-                  Products currently lent out to partners.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="text-center py-12 text-blue-500 flex justify-center items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" /> Loading lent
-                    products...
-                  </div>
-                ) : filteredProducts.length > 0 ? (
-                  renderLentTable()
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    No lent products found.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Total Amount Summary */}
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+          <p className="text-sm text-blue-700">
+            Calculated Total ({quantity} x {formatCurrency(currentPrice)}):
+          </p>
+          <p className="text-3xl font-extrabold text-blue-900">
+            {formatCurrency(calculatedTotal)}
+          </p>
+        </div>
 
-        {/* Product Add/Edit Dialog */}
-        <Dialog
-          open={isProductDialogOpen}
-          onOpenChange={(isOpen) => {
-            setIsProductDialogOpen(isOpen);
-            if (!isOpen) {
-              setEditingProduct(null);
-              productForm.reset();
+        {/* Submit Button */}
+        <div className="flex justify-end pt-4 border-t border-gray-100">
+          <button
+            type="submit"
+            className={`px-6 py-2 text-base font-medium text-white rounded-lg shadow-md transition duration-150 flex items-center justify-center ${
+              isOutgoing && quantity > currentStock
+                ? "bg-red-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+            disabled={
+              loading ||
+              (isOutgoing && quantity > currentStock) ||
+              (partnerRequired && !partnerId)
             }
-          }}
-        >
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>
-                {editingProduct ? "Edit Product" : "Add New Product"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingProduct
-                  ? "Update the details of your product."
-                  : "Enter the details of the new product to add to your inventory."}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...productForm}>
-              <form
-                onSubmit={productForm.handleSubmit(onProductSubmit)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={productForm.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel>Product Type</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          className="flex items-center space-x-4"
-                          disabled={!!editingProduct}
+          >
+            {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
+            {actionText}
+          </button>
+        </div>
+      </form>
+    );
+  }; // End of renderTransactionForm
+
+  /** Renders the main table of active products. */
+  const renderInventoryTable = () => {
+    return (
+      <div className="bg-white rounded-xl shadow-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Product Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type / Tracking
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Stock
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {products.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-8 text-center text-gray-500"
+                  >
+                    No products found. Click "Add Product" to create an
+                    inventory item.
+                  </td>
+                </tr>
+              ) : (
+                products.map((product) => {
+                  const isIndividual = product.type === "individual";
+
+                  return (
+                    <tr
+                      key={product.id}
+                      className="hover:bg-gray-50 transition"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {product.name}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {product.category.split(":")[0]}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            isIndividual
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
                         >
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="sku" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              SKU (Stackable)
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="individual" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Individual (Unique)
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={productForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {productType === "sku"
-                            ? "Title of SKU"
-                            : "Product Name"}
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g., Wireless Mouse"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={productForm.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
+                          {product.type.toUpperCase()}
+                        </span>
+                        {isIndividual && product.imei && (
+                          <div className="text-xs text-gray-500 mt-1 truncate max-w-[150px]">
+                            IMEI: {product.imei}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {formatCurrency(product.price)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className={`px-3 py-1 inline-flex text-sm leading-5 font-bold rounded-full ${
+                            product.stock === 0
+                              ? "bg-red-100 text-red-800"
+                              : "bg-green-100 text-green-800"
+                          }`}
                         >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a category" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Laptops">Laptops</SelectItem>
-                            <SelectItem value="Mobiles">Mobiles</SelectItem>
-                            <SelectItem value="Tablets">Tablets</SelectItem>
-                            <SelectItem value="Chargers & Cables">
-                              Chargers & Cables
-                            </SelectItem>
-                            <SelectItem value="Cases & Covers">
-                              Cases & Covers
-                            </SelectItem>
-                            <SelectItem value="Audio">Audio</SelectItem>
-                            <SelectItem value="Accessories">
-                              Accessories
-                            </SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={productForm.control}
-                  name="imei"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>IMEI / Serial Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter IMEI" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={productForm.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cost Price</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                            onChange={(e) =>
-                              field.onChange(parseFloat(e.target.value) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={productForm.control}
-                    name="stock"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stock Quantity</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="0"
-                            {...field}
-                            disabled={productType === "individual"}
-                            onChange={(e) =>
-                              field.onChange(parseInt(e.target.value) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                  <FormField
-                    control={productForm.control}
-                    name="lentTo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Lent to Partner</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || ""}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="None" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {/* Option to clear lend-out status */}
-                            <SelectItem value="">None</SelectItem>
-                            {/* List of existing partners */}
-                            {partners.map((p) => (
-                              <SelectItem key={p.id} value={p.name}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Only applicable to Individual products.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="secondary">
-                      Cancel
-                    </Button>
-                  </DialogClose>
-                  <Button type="submit">
-                    {editingProduct ? "Save Changes" : "Add Product"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Sale Dialog */}
-        <Dialog
-          open={isSaleDialogOpen}
-          onOpenChange={(isOpen) => {
-            setIsSaleDialogOpen(isOpen);
-            if (!isOpen) {
-              setSellingProduct(null);
-              saleFormValidated.reset();
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Sell Product</DialogTitle>
-              <DialogDescription>
-                Record a sale for "{sellingProduct?.name}". Current stock:{" "}
-                {sellingProduct?.stock}.
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...saleFormValidated}>
-              <form
-                onSubmit={saleFormValidated.handleSubmit(onSaleSubmit)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={saleFormValidated.control}
-                  name="sellingPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Selling Price (per unit)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
+                          {product.stock}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <ActionDropdown
+                          product={product}
+                          openProductModal={openProductModal}
+                          openTransactionModal={openTransactionModal}
+                          handleDeleteClick={handleDeleteClick}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {sellingProduct?.type === "sku" && (
-                  <FormField
-                    control={saleFormValidated.control}
-                    name="quantity"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantity to Sell</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="1"
-                            {...field}
-                            onChange={(e) =>
-                              field.onChange(parseInt(e.target.value) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Max available: {sellingProduct.stock}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                <h3 className="font-semibold pt-2 border-t mt-4">
-                  Buyer Details
-                </h3>
-
-                <FormField
-                  control={saleFormValidated.control}
-                  name="buyerName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Buyer Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={saleFormValidated.control}
-                  name="buyerPhone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Buyer Phone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="1234567890" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="secondary">
-                      Cancel
-                    </Button>
-                  </DialogClose>
-                  <Button type="submit">Complete Sale</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Alert */}
-        <AlertDialog
-          open={isDeleteAlertOpen}
-          onOpenChange={setIsDeleteAlertOpen}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete
-                <span className="font-semibold text-foreground">
-                  {" "}
-                  "{productToDelete?.name}"
-                </span>
-                and all its associated transaction history.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmDelete}
-                className="bg-destructive hover:bg-red-700"
-              >
-                Delete Product
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </>
+    );
+  };
+
+  return (
+    <div className="p-4 md:p-8 min-h-screen font-sans">
+      {/* Header and Controls */}
+      <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900">
+            Shop Inventory
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Manage stock, sales, and lent assets with individual (IMEI)
+            tracking.
+          </p>
+        </div>
+        <div className="flex space-x-3 mt-4 md:mt-0">
+          <button
+            onClick={refreshAllData}
+            className="p-3 bg-white text-gray-700 border border-gray-300 rounded-xl shadow-sm hover:bg-gray-100 transition disabled:opacity-50"
+            disabled={loading}
+            title="Refresh All Data"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={() => openProductModal(null)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-xl shadow-md hover:bg-blue-700 transition disabled:opacity-50"
+            disabled={loading}
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Add Product
+          </button>
+        </div>
+      </header>
+
+      {/* Alerts */}
+      {(message || error) && (
+        <Alert message={message || error} isError={!!error} />
+      )}
+
+      {/* Loading Indicator for general actions */}
+      {loading && !isProductModalOpen && !isTransactionModalOpen && (
+        <div className="text-center p-4 text-blue-600 font-medium">
+          <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+          Processing data...
+        </div>
+      )}
+
+      {/* Tab Navigation */}
+      <div className="flex border-b border-gray-200 mb-6">
+        {[
+          { key: "active", label: "Active Inventory", icon: Package },
+          { key: "lent", label: "Lent Out Status", icon: Zap },
+          { key: "movements", label: "Transaction Log", icon: Repeat },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => {
+              setActiveTab(tab.key as "active" | "lent" | "movements");
+              setPage(1); // Reset to first page on tab change
+            }}
+            className={`flex items-center px-4 py-2 text-sm font-semibold transition border-b-2 ${
+              activeTab === tab.key
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            <tab.icon className="w-4 h-4 mr-2" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {(activeTab === "active" || activeTab === "movements") && (
+        <div className="mb-4 flex items-center space-x-2">
+          <input
+            type="text"
+            placeholder={
+              activeTab === "active"
+                ? `Search by IMEI or Name`
+                : `Search by Name or Type`
+            }
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1); // reset page on new search
+            }}
+            className="border p-2 rounded w-full max-w-sm mb-4"
+          />
+          {search && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setPage(1); // Reset to first page on new search
+              }}
+              className="px-3 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {/* Tab Content */}
+      <div className="pb-8">
+        {activeTab === "active" && renderInventoryTable()}
+        {activeTab === "lent" && (
+          <LentOutStatus
+            products={products}
+            transactions={transactions}
+            loading={loading}
+          />
+        )}
+        {activeTab === "movements" && (
+          <MovementsLog
+            products={products}
+            transactions={transactions}
+            loading={loading}
+          />
+        )}
+      </div>
+      {(activeTab === "active" || activeTab === "movements") && (
+        <div className="flex items-center gap-2 mt-4">
+          {/* Prev Button */}
+          <button
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+            disabled={page === 1}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            Prev
+          </button>
+
+          {/* Page Numbers */}
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter(
+              (p) =>
+                p === 1 || // always show first
+                p === totalPages || // always show last
+                (p >= page - 2 && p <= page + 2) // show 2 before and after current page
+            )
+            .map((p, idx, arr) => (
+              <React.Fragment key={p}>
+                {/* Ellipsis before hidden pages */}
+                {idx > 0 && arr[idx - 1] !== p - 1 && (
+                  <span className="px-2">...</span>
+                )}
+                <button
+                  onClick={() => setPage(p)}
+                  className={`px-3 py-1 border rounded ${
+                    page === p ? "bg-blue-500 text-white" : "bg-white"
+                  }`}
+                >
+                  {p}
+                </button>
+              </React.Fragment>
+            ))}
+
+          {/* Next Button */}
+          <button
+            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+            disabled={page === totalPages}
+            className="px-3 py-1 border rounded disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* --- MODALS --- */}
+
+      <Modal
+        isOpen={isProductModalOpen}
+        onClose={closeProductModal}
+        title={currentProduct ? "Edit Product" : "Add New Product"}
+      >
+        {renderProductForm()}
+      </Modal>
+
+      <Modal
+        isOpen={isTransactionModalOpen}
+        onClose={closeTransactionModal}
+        title={`Record Inventory ${transactionFormData.type
+          .toUpperCase()
+          .replace("-", " ")}`}
+      >
+        {renderTransactionForm()}
+      </Modal>
+
+      <ConfirmDeleteModal
+        isOpen={isConfirmDeleteModalOpen}
+        productName={
+          products.find((p) => p.id === productToDeleteId)?.name || ""
+        }
+        onClose={closeConfirmDeleteModal}
+        onConfirm={handleConfirmDelete}
+        loading={loading}
+      />
+    </div>
   );
 }

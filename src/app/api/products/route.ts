@@ -15,13 +15,44 @@ export type Product = {
 };
 
 // --- GET /api/products (Read All) ---
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const stmt = db.prepare(
-      "SELECT id, type, name, category, price, stock, imei, created_at FROM products ORDER BY name ASC"
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim() || "";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const offset = (page - 1) * limit;
+
+    // Only active products: stock > 0
+    let whereClause = "WHERE stock > 0";
+    const params: any[] = [];
+
+    if (q) {
+      // Search differently depending on product type
+      whereClause += ` AND (
+        (type = 'individual' AND imei LIKE ?) OR
+        (type = 'sku' AND name LIKE ?)
+      )`;
+      params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const stmt = db.prepare(`
+      SELECT id, type, name, category, price, stock, imei, created_at
+      FROM products
+      ${whereClause}
+      ORDER BY name ASC
+      LIMIT ? OFFSET ?
+    `);
+
+    const products: Product[] = stmt.all(...params, limit, offset) as Product[];
+
+    // Total count for pagination (respecting filters)
+    const countStmt = db.prepare(
+      `SELECT COUNT(*) as count FROM products ${whereClause}`
     );
-    const products: Product[] = stmt.all() as Product[];
-    return NextResponse.json({ products }, { status: 200 });
+    const { count } = countStmt.get(...params) as { count: number };
+
+    return NextResponse.json({ products, total: count }, { status: 200 });
   } catch (error) {
     console.error("GET Products DB error:", error);
     return NextResponse.json(
@@ -187,7 +218,7 @@ export async function DELETE(request: NextRequest) {
 
     // Optionally delete related transactions (cascading delete if foreign keys are set up, but safer to delete manually here)
     const deleteTransactionsStmt = db.prepare(
-      "DELETE FROM transactions WHERE productId = ?"
+      "DELETE FROM transactions WHERE product_id = ?"
     );
     deleteTransactionsStmt.run(productId);
 

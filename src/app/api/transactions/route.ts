@@ -3,27 +3,65 @@ import { db } from "@/lib/database";
 import { randomUUID } from "crypto";
 
 // Define the Transaction type for consistency
-export type Transaction = {
+interface Transaction {
   id: string;
-  productId: string;
-  type: "sale" | "lend-out" | "return";
+  productId: string; // CamelCase for TypeScript
+  type: "purchase" | "sale" | "lend-out" | "return";
   quantity: number;
-  price: number; // Unit price at time of transaction
-  totalAmount: number;
-  date: string; // ISO date string
-  party: string; // Buyer/Partner Name (for display/search)
-  partnerId: string; // ID of the associated partner
+  price: number;
+  totalAmount: number; // CamelCase for TypeScript
+  date: string;
+  party: string;
+  partnerId: string; // CamelCase for TypeScript
   created_at: string;
-};
-
+}
 // --- GET /api/transactions (Read All) ---
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const stmt = db.prepare(
-      "SELECT id, productId, type, quantity, price, totalAmount, date, party, partnerId, created_at FROM transactions ORDER BY created_at DESC"
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim() || "";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const offset = (page - 1) * limit;
+
+    let whereClause = "WHERE deleted_at IS NULL";
+    const params: any[] = [];
+
+    if (q) {
+      whereClause += " AND (snapshot_partner_name LIKE ? OR type LIKE ?)";
+      params.push(`%${q}%`, `%${q}%`);
+    }
+
+    const stmt = db.prepare(`
+      SELECT 
+        id, 
+        product_id AS productId,
+        type, 
+        quantity, 
+        price, 
+        total_amount AS totalAmount,
+        date, 
+        snapshot_partner_name AS party, 
+        partner_id AS partnerId,
+        created_at
+      FROM transactions
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+
+    const transactions: Transaction[] = stmt.all(
+      ...params,
+      limit,
+      offset
+    ) as Transaction[];
+
+    const countStmt = db.prepare(
+      `SELECT COUNT(*) as count FROM transactions ${whereClause}`
     );
-    const transactions: Transaction[] = stmt.all() as Transaction[];
-    return NextResponse.json({ transactions }, { status: 200 });
+    const { count } = countStmt.get(...params) as { count: number };
+
+    return NextResponse.json({ transactions, total: count }, { status: 200 });
   } catch (error) {
     console.error("GET Transactions DB error:", error);
     return NextResponse.json(
@@ -48,7 +86,6 @@ export async function POST(request: NextRequest) {
       partnerId,
     } = data;
     const newTransactionId = randomUUID();
-    const createdAt = new Date().toISOString();
 
     if (
       !productId ||
@@ -56,31 +93,38 @@ export async function POST(request: NextRequest) {
       quantity === undefined ||
       price === undefined ||
       totalAmount === undefined ||
-      !date ||
-      !party ||
-      !partnerId
+      !date
     ) {
       return NextResponse.json(
         { message: "Missing required fields for transaction creation." },
         { status: 400 }
       );
     }
+    // 1. Sanitize the incoming ID.
+    const sanitizedPartnerId = partnerId ? partnerId.trim() : "";
 
+    // 2. Since the database schema allows partner_id to be NULL,
+    // we set it to null for generic/walk-in transactions. This is the efficient approach.
+    const partnerIdForDB =
+      !sanitizedPartnerId || sanitizedPartnerId === "CUSTOMER"
+        ? null
+        : sanitizedPartnerId;
     const stmt = db.prepare(
-      "INSERT INTO transactions (id, productId, type, quantity, price, totalAmount, date, party, partnerId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      `INSERT INTO transactions (
+            id, product_id, type, quantity, price, total_amount, date, snapshot_partner_name, partner_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     stmt.run(
-      newTransactionId,
-      productId,
-      type,
-      quantity,
-      price,
-      totalAmount,
-      date,
-      party,
-      partnerId,
-      createdAt
+      newTransactionId, // 1. id
+      productId, // 2. product_id
+      type, // 3. type
+      quantity, // 4. quantity
+      price, // 5. price
+      totalAmount, // 6. total_amount
+      date, // 7. date
+      party, // 8. The value (party name) is inserted into the 'snapshot_partner_name' column
+      partnerIdForDB
     );
 
     return NextResponse.json(
@@ -110,9 +154,8 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const stmt = db.prepare("DELETE FROM transactions WHERE id = ?");
+    const stmt = db.prepare("DELETE FROM transactions WHERE product_id = ?");
     const result = stmt.run(transactionId);
-
     if (result.changes === 0) {
       return NextResponse.json(
         { message: "Transaction not found." },

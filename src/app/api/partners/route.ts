@@ -15,16 +15,39 @@ export type Partner = {
 };
 
 // --- GET /api/partners (Read All, exclude soft-deleted) ---
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const stmt = db.prepare(
-      `SELECT id, type, name, phone, shop_name, created_at, updated_at, deleted_at
-       FROM partners
-       WHERE deleted_at IS NULL
-       ORDER BY name ASC`
-    );
-    const partners: Partner[] = stmt.all() as Partner[];
-    return NextResponse.json({ partners }, { status: 200 });
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim() || "";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const offset = (page - 1) * limit;
+
+    let whereClause = "WHERE deleted_at IS NULL";
+    const params: any[] = [];
+
+    if (q) {
+      whereClause += " AND name LIKE ?";
+      params.push(`%${q}%`);
+    }
+
+    const stmt = db.prepare(`
+      SELECT id, type, name, phone, shop_name, created_at, updated_at, deleted_at
+      FROM partners
+      ${whereClause}
+      ORDER BY name ASC
+      LIMIT ? OFFSET ?
+    `);
+
+    const partners: Partner[] = stmt.all(...params, limit, offset) as Partner[];
+
+    // Total count for pagination
+    const countStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM partners ${whereClause}
+    `);
+    const { count } = countStmt.get(...params) as { count: number };
+
+    return NextResponse.json({ partners, total: count }, { status: 200 });
   } catch (error) {
     console.error("GET Partners DB error:", error);
     return NextResponse.json(

@@ -13,16 +13,39 @@ function jsonResponse(
 }
 
 // --- GET /api/expenses ---
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim() || "";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const offset = (page - 1) * limit;
+
+    let whereClause = "WHERE deleted_at IS NULL";
+    const params: any[] = [];
+
+    if (q) {
+      whereClause += " AND description LIKE ?";
+      params.push(`%${q}%`);
+    }
+
     const stmt = db.prepare(`
       SELECT id, date, category, description, amount, created_at, updated_at, deleted_at
       FROM expenses
-      WHERE deleted_at IS NULL
+      ${whereClause}
       ORDER BY date DESC
+      LIMIT ? OFFSET ?
     `);
-    const expenses: Expense[] = stmt.all() as Expense[];
-    return jsonResponse(true, expenses);
+
+    const expenses: Expense[] = stmt.all(...params, limit, offset) as Expense[];
+
+    // Get total count for pagination
+    const countStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM expenses ${whereClause}
+    `);
+    const { count } = countStmt.get(...params) as { count: number };
+
+    return jsonResponse(true, { expenses, total: count });
   } catch (error) {
     console.error("GET Expenses DB error:", error);
     return jsonResponse(false, null, "Error fetching expenses.");
