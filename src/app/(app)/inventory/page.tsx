@@ -52,13 +52,14 @@ export type Product = {
   stock: number;
   imei?: string | null;
   created_at: string;
+  partnerId?: string | null; // Vendor/Supplier association
 };
 
 /** Transaction type from /api/transactions (Aliased columns are used for naming) */
 export type Transaction = {
   id: string;
   productId: string; // Mapped from product_id
-  type: "purchase" | "sale" | "lend-out" | "return";
+  type: "purchase" | "sale";
   quantity: number;
   price: number; // Unit price at time of transaction
   totalAmount: number; // Mapped from total_amount
@@ -77,6 +78,7 @@ type ProductFormData = {
   stock: number;
   type: Product["type"];
   imei: string; // Used only if type is 'individual'
+  partnerId: string; // Optional field for vendor association
 };
 
 /** Form data structure for recording a Transaction */
@@ -85,7 +87,10 @@ type TransactionFormData = {
   quantity: number;
   partnerId: string;
   partyName: string; // Name for the transaction record
+  partyPhone?: string;
+  partyShop?: string | null;
   date: string;
+  price: Transaction["price"];
 };
 
 // --- CONSTANTS ---
@@ -107,16 +112,20 @@ const initialProductFormData: ProductFormData = {
   name: "",
   category: INVENTORY_CATEGORIES[0],
   price: 0,
-  stock: 0,
+  stock: 1,
   type: "sku",
   imei: "",
+  partnerId: "",
 };
 
 const initialTransactionFormData: TransactionFormData = {
-  type: "sale",
+  type: "purchase",
   quantity: 1,
+  price: 0,
   partnerId: "",
   partyName: "",
+  partyPhone: "",
+  partyShop: "",
   date: new Date().toISOString().substring(0, 10), // Today's date YYYY-MM-DD
 };
 
@@ -124,12 +133,11 @@ const initialTransactionFormData: TransactionFormData = {
 
 /** Formats currency */
 const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-QA", {
     style: "currency",
-    currency: "USD",
+    currency: "QAR",
   }).format(amount);
 };
-
 /** Custom Modal Component */
 interface ModalProps {
   children: React.ReactNode;
@@ -255,33 +263,6 @@ const ActionDropdown: React.FC<ActionDropdownProps> = ({
       disabled: isOutOfStock,
       className: "text-red-600 hover:bg-red-50 disabled:text-gray-400",
     },
-    // Conditional actions for individually tracked items (Lend/Return)
-    ...(isIndividual
-      ? [
-          {
-            id: "lend-out",
-            label: "Lend Out",
-            icon: Zap,
-            onClick: () => {
-              openTransactionModal(product, "lend-out");
-              setIsOpen(false); // Close dropdown after action
-            },
-            disabled: isOutOfStock,
-            className:
-              "text-indigo-600 hover:bg-indigo-50 disabled:text-gray-400",
-          },
-          {
-            id: "return",
-            label: "Record Return",
-            icon: Repeat,
-            onClick: () => {
-              openTransactionModal(product, "return");
-              setIsOpen(false); // Close dropdown after action
-            },
-            className: "text-yellow-600 hover:bg-yellow-50",
-          },
-        ]
-      : []),
     {
       id: "delete",
       label: "Delete Product",
@@ -412,11 +393,6 @@ const MovementsLog: React.FC<MovementsLogProps> = ({
     switch (type) {
       case "sale":
         return "bg-red-100 text-red-800 border-red-300";
-      case "lend-out":
-        return "bg-indigo-100 text-indigo-800 border-indigo-300";
-      case "return":
-      case "purchase":
-        return "bg-green-100 text-green-800 border-green-300";
       default:
         return "bg-gray-100 text-gray-800 border-gray-300";
     }
@@ -475,92 +451,6 @@ const MovementsLog: React.FC<MovementsLogProps> = ({
   );
 };
 
-// --- Component: LentOutStatus ---
-
-interface LentOutStatusProps {
-  products: Product[];
-  transactions: Transaction[];
-  loading: boolean;
-}
-
-const LentOutStatus: React.FC<LentOutStatusProps> = ({
-  products,
-  transactions,
-  loading,
-}) => {
-  const lentOutSummary = useMemo(() => {
-    // 1. Calculate net lent quantity per product
-    const netLentMap = transactions.reduce((acc, t) => {
-      if (t.type === "lend-out") {
-        acc[t.productId] = (acc[t.productId] || 0) + t.quantity;
-      } else if (t.type === "return") {
-        acc[t.productId] = (acc[t.productId] || 0) - t.quantity;
-      }
-      return acc;
-    }, {} as Record<string, number>);
-
-    // 2. Filter products that currently have a net lent quantity > 0 AND are 'individual' type
-    return products
-      .filter((p) => p.type === "individual" && (netLentMap[p.id] || 0) > 0)
-      .map((product) => ({
-        product,
-        lentQuantity: netLentMap[product.id] || 0,
-      }));
-  }, [products, transactions]);
-
-  if (loading && lentOutSummary.length === 0) {
-    return (
-      <div className="text-center p-8 text-gray-500">
-        <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
-        Calculating lent out status...
-      </div>
-    );
-  }
-
-  return (
-    <div className="pt-4">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        Currently Lent Out Items (Net Quantity)
-      </h3>
-      {lentOutSummary.length === 0 ? (
-        <div className="p-6 text-center bg-green-50 rounded-lg border border-green-200 text-green-700">
-          <Info className="w-6 h-6 mx-auto mb-2" />
-          All individually tracked items have been successfully returned. Zero
-          net inventory is currently lent out.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {lentOutSummary.map(({ product, lentQuantity }) => (
-            <div
-              key={product.id}
-              className="p-4 bg-white rounded-xl shadow-sm border border-yellow-300 flex justify-between items-center transition hover:shadow-md"
-            >
-              <div>
-                <p className="text-lg font-bold text-gray-900">
-                  {product.name}
-                </p>
-                {product.imei && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    IMEI: {product.imei}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <span className="inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                  {lentQuantity} unit(s)
-                </span>
-                <p className="text-sm text-gray-600 mt-1">
-                  Active Stock: {product.stock}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- Main Component ---
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -577,9 +467,7 @@ export default function InventoryPage() {
   const totalPages = Math.ceil(total / limit);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<"active" | "lent" | "movements">(
-    "active"
-  );
+  const [activeTab, setActiveTab] = useState<"active" | "movements">("active");
 
   // Product Modal State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -616,23 +504,19 @@ export default function InventoryPage() {
                 search
               )}&page=${page}&limit=${limit}`
             )
-          : activeTab === "movements"
-          ? await fetch(
+          : await fetch(
               `/api/transactions?q=${encodeURIComponent(
                 search
               )}&page=${page}&limit=${limit}`
-            )
-          : null;
-      if (res) {
-        const data = await res.json();
-        if (res.ok) {
-          activeTab === "active"
-            ? setProducts(data.products || [])
-            : setTransactions(data.transactions || []);
-          setTotal(data.total);
-        } else {
-          setError(data.message || "Failed to fetch products.");
-        }
+            );
+      const data = await res.json();
+      if (res.ok) {
+        activeTab === "active"
+          ? setProducts(data.products || [])
+          : setTransactions(data.transactions || []);
+        setTotal(data.total);
+      } else {
+        setError(data.message || "Failed to fetch products.");
       }
     } catch (err) {
       setError("Network error fetching products.");
@@ -687,6 +571,7 @@ export default function InventoryPage() {
             stock: product.stock,
             type: product.type,
             imei: product.imei || "",
+            partnerId: product.partnerId || "", // Reset or set based on product if needed
           }
         : initialProductFormData
     );
@@ -713,6 +598,8 @@ export default function InventoryPage() {
     const url = isEditing
       ? `/api/products?id=${currentProduct.id}`
       : "/api/products";
+    const urlTr = "/api/transactions";
+
     const method = isEditing ? "PUT" : "POST";
 
     // Basic validation and type conversion
@@ -727,10 +614,12 @@ export default function InventoryPage() {
     if (
       isNaN(priceValue) ||
       isNaN(stockValue) ||
-      priceValue < 0 ||
-      stockValue < 0
+      priceValue < 1 ||
+      stockValue < 1
     ) {
-      setError("Price and Stock must be valid non-negative numbers.");
+      setError(
+        "Price and Stock must be valid non-negative numbers and greater than 0."
+      );
       setLoading(false);
       return;
     }
@@ -740,9 +629,8 @@ export default function InventoryPage() {
         ...productFormData,
         price: priceValue,
         stock: stockValue,
-        imei: isIndividual ? productFormData.imei || null : null,
+        imei: productFormData.imei,
       };
-
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -751,9 +639,36 @@ export default function InventoryPage() {
 
       const result = await response.json();
       if (response.ok) {
-        setMessage(`Product ${isEditing ? "updated" : "added"} successfully.`);
-        closeProductModal();
-        fetchData(); // Refresh only product list
+        // 2. POST the Transaction
+        const transactionPayload = {
+          productId: result.id,
+          type: "purchase",
+          quantity: stockValue,
+          price: priceValue,
+          totalAmount: priceValue * stockValue,
+          date: new Date().toISOString(),
+          party: transactionFormData.partyName,
+          partyPhone: transactionFormData.partyPhone,
+          partyShop: transactionFormData.partyShop,
+          partnerId: productFormData.partnerId, // Use a placeholder if not a partner transaction
+        };
+        const responseTr = await fetch(urlTr, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(transactionPayload),
+        });
+        if (responseTr.ok) {
+          setMessage(
+            `Product ${isEditing ? "updated" : "added"} successfully.`
+          );
+          closeProductModal();
+          fetchData(); // Refresh data
+        } else {
+          setError(
+            result.message ||
+              `Failed to ${isEditing ? "update" : "add"} transaction.`
+          );
+        }
       } else {
         setError(
           result.message || `Failed to ${isEditing ? "update" : "add"} product.`
@@ -814,10 +729,7 @@ export default function InventoryPage() {
     let defaultPartyName = "";
 
     // If transaction is related to a partner (lend-out, return, purchase), default to the first one available
-    if (
-      (type === "lend-out" || type === "return" || type === "purchase") &&
-      partners.length > 0
-    ) {
+    if (type === "purchase" && partners.length > 0) {
       defaultPartnerId = partners[0].id;
       defaultPartyName = partners[0].name;
     }
@@ -840,10 +752,7 @@ export default function InventoryPage() {
 
   // Updates partyName when partnerId changes for transactions involving partners
   useEffect(() => {
-    const isPartnerTransaction =
-      transactionFormData.type === "lend-out" ||
-      transactionFormData.type === "return" ||
-      transactionFormData.type === "purchase";
+    const isPartnerTransaction = transactionFormData.type === "purchase";
 
     if (transactionProduct && isPartnerTransaction) {
       const selectedPartner = partners.find(
@@ -872,12 +781,8 @@ export default function InventoryPage() {
 
     const quantity = parseInt(transactionFormData.quantity.toString(), 10);
     const productPrice = transactionProduct.price;
-    const isIncoming =
-      transactionFormData.type === "return" ||
-      transactionFormData.type === "purchase";
-    const isOutgoing =
-      transactionFormData.type === "lend-out" ||
-      transactionFormData.type === "sale";
+    const isIncoming = transactionFormData.type === "purchase";
+    const isOutgoing = transactionFormData.type === "sale";
 
     if (isNaN(quantity) || quantity <= 0) {
       setError("Quantity must be a positive number.");
@@ -972,7 +877,33 @@ export default function InventoryPage() {
   };
 
   // --- Render Functions ---
-
+  // Partner selection options
+  const partnerOptions = partners.map((p) => ({
+    id: p.id,
+    name: p.name ? p.name : "",
+    shop: p.shop_name ? p.shop_name : "",
+    phone: p.phone,
+  }));
+  if (partnerOptions.length > 0) {
+    if (!productFormData.partnerId) {
+      setProductFormData({
+        ...productFormData,
+        partnerId: partnerOptions[0].id,
+      });
+    }
+    if (
+      transactionFormData.type === "purchase" &&
+      !transactionFormData.partnerId
+    ) {
+      setTransactionFormData((prev) => ({
+        ...prev,
+        partnerId: partnerOptions[0].id,
+        partyName: partnerOptions[0].name,
+        partyPhone: partnerOptions[0].phone,
+        partyShop: partnerOptions[0].shop,
+      }));
+    }
+  }
   /** Renders the form for adding/editing a product. */
   const renderProductForm = () => {
     const isIndividual = productFormData.type === "individual";
@@ -982,18 +913,27 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Product Name
+              Pricing/Tracking Type
             </label>
-            <input
-              type="text"
-              value={productFormData.name}
-              onChange={(e) =>
-                setProductFormData({ ...productFormData, name: e.target.value })
-              }
-              required
-              placeholder="E.g., Ultra Fast Charger"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            />
+            <div className="relative">
+              <select
+                value={productFormData.type}
+                onChange={(e) =>
+                  setProductFormData({
+                    ...productFormData,
+                    type: e.target.value as Product["type"],
+                    imei: "",
+                  })
+                }
+                disabled={!!currentProduct} // Disable changing type when editing
+                required
+                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="sku">SKU (Stock Keeping Unit)</option>
+                <option value="individual">Individual (Tracked by IMEI)</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1026,31 +966,22 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Pricing/Tracking Type
+              Product Name
             </label>
-            <div className="relative">
-              <select
-                value={productFormData.type}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    type: e.target.value as Product["type"],
-                    imei: "",
-                  })
-                }
-                disabled={!!currentProduct} // Disable changing type when editing
-                required
-                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="sku">SKU (Stock Keeping Unit)</option>
-                <option value="individual">Individual (Tracked by IMEI)</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <input
+              type="text"
+              value={productFormData.name}
+              onChange={(e) =>
+                setProductFormData({ ...productFormData, name: e.target.value })
+              }
+              required
+              placeholder="E.g., Ultra Fast Charger"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Price (USD)
+              Price (QAR)
             </label>
             <input
               type="number"
@@ -1078,12 +1009,12 @@ export default function InventoryPage() {
             </label>
             <input
               type="number"
-              min="0"
+              min="1"
               value={isIndividual ? 1 : productFormData.stock}
               onChange={(e) =>
                 setProductFormData({
                   ...productFormData,
-                  stock: parseInt(e.target.value, 10) || 0,
+                  stock: parseInt(e.target.value, 10) || 1,
                 })
               }
               required
@@ -1096,27 +1027,70 @@ export default function InventoryPage() {
               }`}
             />
           </div>
-          {isIndividual && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                IMEI / Serial Number
-              </label>
-              <input
-                type="text"
-                value={productFormData.imei}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    imei: e.target.value,
-                  })
-                }
-                placeholder="Optional but recommended"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              IMEI / Serial Number
+            </label>
+            <input
+              type="text"
+              value={productFormData.imei}
+              onChange={(e) =>
+                setProductFormData({
+                  ...productFormData,
+                  imei: e.target.value,
+                })
+              }
+              required
+              placeholder="Recommended"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
         </div>
-
+        <div>
+          <label
+            htmlFor="partnerId"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Partner / Party Involved
+          </label>
+          <div className="relative">
+            <select
+              id="partnerId"
+              value={productFormData.partnerId}
+              onChange={(e) => {
+                setProductFormData({
+                  ...productFormData,
+                  partnerId: e.target.value,
+                });
+                const selectedPartner = partners.find(
+                  (p) => p.id === e.target.value
+                );
+                setTransactionFormData((prev) => ({
+                  ...prev,
+                  partnerId: e.target.value,
+                  partyName: selectedPartner ? selectedPartner.name : "",
+                  partyPhone: selectedPartner ? selectedPartner.phone : "",
+                  partyShop: selectedPartner ? selectedPartner.shop_name : "",
+                }));
+              }}
+              required
+              className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
+            >
+              {partnerOptions.length > 0 ? (
+                partnerOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.shop ? `${p.shop}-${p.name}` : p.name}
+                  </option>
+                ))
+              ) : (
+                <option value="" disabled>
+                  No partners available (Try refreshing)
+                </option>
+              )}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
         <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
           <button
             type="button"
@@ -1146,67 +1120,31 @@ export default function InventoryPage() {
     const { type, quantity, partnerId } = transactionFormData;
 
     const isSale = type === "sale";
-    const isLendOut = type === "lend-out";
-    const isReturn = type === "return";
     const isPurchase = type === "purchase";
 
     const isIndividualProduct = transactionProduct.type === "individual";
 
-    const actionText = isSale
-      ? "Sell"
-      : isLendOut
-      ? "Lend Out"
-      : isReturn
-      ? "Record Return"
-      : "Record Stock-In (Purchase)";
+    const actionText = isSale ? "Sell" : "Record Stock-In (Purchase)";
 
-    const partnerRequired = isLendOut || isReturn || isPurchase;
-    const isOutgoing = isSale || isLendOut;
+    const partnerRequired = isPurchase;
+    const isOutgoing = isSale;
 
     const currentStock = transactionProduct.stock;
     const currentPrice = transactionProduct.price;
-
     // Use price if set, otherwise 0 to prevent NaN
     const calculatedTotal = currentPrice * (quantity || 0);
 
-    const transactionTypes = isIndividualProduct
-      ? [
-          {
-            type: "sale" as const,
-            label: "Sale (Outgoing)",
-            icon: DollarSign,
-            color: "bg-red-600 hover:bg-red-700",
-          },
-          {
-            type: "lend-out" as const,
-            label: "Lend Out (Outgoing)",
-            icon: Zap,
-            color: "bg-indigo-600 hover:bg-indigo-700",
-          },
-          {
-            type: "return" as const,
-            label: "Return (Incoming)",
-            icon: Repeat,
-            color: "bg-blue-600 hover:bg-blue-700",
-          },
-        ]
-      : [
-          {
-            type: "sale" as const,
-            label: "Sale (Outgoing)",
-            icon: DollarSign,
-            color: "bg-red-600 hover:bg-red-700",
-          },
-        ];
+    const transactionTypes = [
+      {
+        type: "sale" as const,
+        label: "Sale (Outgoing)",
+        icon: DollarSign,
+        color: "bg-red-600 hover:bg-red-700",
+      },
+    ];
 
     const isQuantityDisabled = isIndividualProduct;
     const maxQuantity = isOutgoing ? currentStock : 9999;
-
-    // Partner selection options
-    const partnerOptions = partners.map((p) => ({
-      id: p.id,
-      name: p.shop_name ? `${p.shop_name} (${p.name})` : p.name,
-    }));
 
     // If it's an individual item transaction (Lend or Return), force quantity to 1
     if (isQuantityDisabled) {
@@ -1234,23 +1172,20 @@ export default function InventoryPage() {
             >
               {currentStock}
             </span>{" "}
-            | Price: {formatCurrency(currentPrice)}
+            | Current Price: {formatCurrency(currentPrice)}
           </p>
         </div>
 
         {/* Transaction Type Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Movement Type
+            Movement Type
           </label>
           <div className="grid grid-cols-2 gap-3">
             {transactionTypes.map((t) => (
               <button
                 key={t.type}
                 type="button"
-                onClick={() =>
-                  setTransactionFormData((prev) => ({ ...prev, type: t.type }))
-                }
                 className={`p-3 text-center rounded-lg border-2 font-semibold transition ${
                   type === t.type
                     ? `${t.color} text-white border-transparent shadow-lg`
@@ -1265,67 +1200,72 @@ export default function InventoryPage() {
         </div>
 
         {/* Partner Selection (Required for Purchase, Lend Out, Return) */}
-        {partnerRequired ? (
+        <div className="grid grid-cols-1">
           <div>
             <label
-              htmlFor="partnerId"
+              htmlFor="customerName"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              Partner / Party Involved
+              Customer Name
             </label>
-            <div className="relative">
-              <select
-                id="partnerId"
-                value={partnerId}
-                onChange={(e) =>
-                  setTransactionFormData({
-                    ...transactionFormData,
-                    partnerId: e.target.value,
-                  })
-                }
-                required
-                className="w-full appearance-none px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white focus:ring-blue-500 focus:border-blue-500"
-              >
-                {partnerOptions.length > 0 ? (
-                  partnerOptions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))
-                ) : (
-                  <option value="" disabled>
-                    No partners available (Try refreshing)
-                  </option>
-                )}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <input
+              id="customerName"
+              type="text"
+              placeholder="E.g., John Doe"
+              value={transactionFormData.partyName}
+              onChange={(e) =>
+                setTransactionFormData({
+                  ...transactionFormData,
+                  partyName: e.target.value,
+                })
+              }
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
+            />
           </div>
-        ) : (
-          <div className="grid grid-cols-1">
-            <div>
-              <label
-                htmlFor="customerName"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Customer / Party Name
-              </label>
-              <input
-                id="customerName"
-                type="text"
-                placeholder="E.g., John Doe"
-                value={transactionFormData.partyName}
-                onChange={(e) =>
-                  setTransactionFormData({
-                    ...transactionFormData,
-                    partyName: e.target.value,
-                  })
-                }
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
-              />
-            </div>
+          <div>
+            <label
+              htmlFor="customerPhone"
+              className="block text-sm font-medium text-gray-700 mb-1 mt-2"
+            >
+              Customer Phone
+            </label>
+            <input
+              id="customerPhone"
+              type="text"
+              placeholder="E.g., +97412345678"
+              value={transactionFormData.partyPhone}
+              onChange={(e) =>
+                setTransactionFormData({
+                  ...transactionFormData,
+                  partyPhone: e.target.value,
+                })
+              }
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
+            />
           </div>
-        )}
+          <div>
+            <label
+              htmlFor="salePrice"
+              className="block text-sm font-medium text-gray-700 mb-1 mt-2"
+            >
+              Final Sale Price
+            </label>
+            <input
+              id="salePrice"
+              type="number"
+              placeholder="E.g., 10"
+              required
+              value={transactionFormData.price}
+              onChange={(e) =>
+                setTransactionFormData({
+                  ...transactionFormData,
+                  price: parseFloat(e.target.value) || 0,
+                })
+              }
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
+            />
+          </div>
+        </div>
 
         {/* Quantity and Date */}
         <div className="grid grid-cols-2 gap-4">
@@ -1391,10 +1331,11 @@ export default function InventoryPage() {
         {/* Total Amount Summary */}
         <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
           <p className="text-sm text-blue-700">
-            Calculated Total ({quantity} x {formatCurrency(currentPrice)}):
+            Calculated Total ({quantity} x{" "}
+            {formatCurrency(transactionFormData.price)}):
           </p>
           <p className="text-3xl font-extrabold text-blue-900">
-            {formatCurrency(calculatedTotal)}
+            {formatCurrency(transactionFormData.price * quantity)}
           </p>
         </div>
 
@@ -1573,13 +1514,12 @@ export default function InventoryPage() {
       <div className="flex border-b border-gray-200 mb-6">
         {[
           { key: "active", label: "Active Inventory", icon: Package },
-          { key: "lent", label: "Lent Out Status", icon: Zap },
           { key: "movements", label: "Transaction Log", icon: Repeat },
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => {
-              setActiveTab(tab.key as "active" | "lent" | "movements");
+              setActiveTab(tab.key as "active" | "movements");
               setPage(1); // Reset to first page on tab change
             }}
             className={`flex items-center px-4 py-2 text-sm font-semibold transition border-b-2 ${
@@ -1593,45 +1533,36 @@ export default function InventoryPage() {
           </button>
         ))}
       </div>
-      {(activeTab === "active" || activeTab === "movements") && (
-        <div className="mb-4 flex items-center space-x-2">
-          <input
-            type="text"
-            placeholder={
-              activeTab === "active"
-                ? `Search by IMEI or Name`
-                : `Search by Name or Type`
-            }
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1); // reset page on new search
+      <div className="mb-4 flex items-center space-x-2 relative w-full max-w-sm">
+        <input
+          type="text"
+          placeholder={
+            activeTab === "active"
+              ? `Search by IMEI or Name`
+              : `Search by Name or Type`
+          }
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1); // reset page on new search
+          }}
+          className="border p-2 w-full pr-10 rounded-lg" // add pr-10 to make space for icon
+        />
+        {search && (
+          <button
+            onClick={() => {
+              setSearch("");
+              setPage(1); // reset page on clear
             }}
-            className="border p-2 rounded w-full max-w-sm mb-4"
-          />
-          {search && (
-            <button
-              onClick={() => {
-                setSearch("");
-                setPage(1); // Reset to first page on new search
-              }}
-              className="px-3 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        )}
+      </div>
       {/* Tab Content */}
       <div className="pb-8">
         {activeTab === "active" && renderInventoryTable()}
-        {activeTab === "lent" && (
-          <LentOutStatus
-            products={products}
-            transactions={transactions}
-            loading={loading}
-          />
-        )}
         {activeTab === "movements" && (
           <MovementsLog
             products={products}
@@ -1640,52 +1571,50 @@ export default function InventoryPage() {
           />
         )}
       </div>
-      {(activeTab === "active" || activeTab === "movements") && (
-        <div className="flex items-center gap-2 mt-4">
-          {/* Prev Button */}
-          <button
-            onClick={() => setPage((p) => Math.max(p - 1, 1))}
-            disabled={page === 1}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >
-            Prev
-          </button>
+      <div className="flex items-center gap-2 mt-4">
+        {/* Prev Button */}
+        <button
+          onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          disabled={page === 1}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Prev
+        </button>
 
-          {/* Page Numbers */}
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter(
-              (p) =>
-                p === 1 || // always show first
-                p === totalPages || // always show last
-                (p >= page - 2 && p <= page + 2) // show 2 before and after current page
-            )
-            .map((p, idx, arr) => (
-              <React.Fragment key={p}>
-                {/* Ellipsis before hidden pages */}
-                {idx > 0 && arr[idx - 1] !== p - 1 && (
-                  <span className="px-2">...</span>
-                )}
-                <button
-                  onClick={() => setPage(p)}
-                  className={`px-3 py-1 border rounded ${
-                    page === p ? "bg-blue-500 text-white" : "bg-white"
-                  }`}
-                >
-                  {p}
-                </button>
-              </React.Fragment>
-            ))}
+        {/* Page Numbers */}
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter(
+            (p) =>
+              p === 1 || // always show first
+              p === totalPages || // always show last
+              (p >= page - 2 && p <= page + 2) // show 2 before and after current page
+          )
+          .map((p, idx, arr) => (
+            <React.Fragment key={p}>
+              {/* Ellipsis before hidden pages */}
+              {idx > 0 && arr[idx - 1] !== p - 1 && (
+                <span className="px-2">...</span>
+              )}
+              <button
+                onClick={() => setPage(p)}
+                className={`px-3 py-1 border rounded ${
+                  page === p ? "bg-blue-500 text-white" : "bg-white"
+                }`}
+              >
+                {p}
+              </button>
+            </React.Fragment>
+          ))}
 
-          {/* Next Button */}
-          <button
-            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-            disabled={page === totalPages}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
+        {/* Next Button */}
+        <button
+          onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+          disabled={page === totalPages}
+          className="px-3 py-1 border rounded disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
 
       {/* --- MODALS --- */}
 

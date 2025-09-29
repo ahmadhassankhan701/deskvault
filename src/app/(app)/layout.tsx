@@ -82,7 +82,7 @@ function AppLayoutContent({ children }: { children: React.ReactNode }) {
                 <SidebarMenuItem>
                   <NavLink href="/partners">
                     <Users />
-                    Partners
+                    Vendors
                   </NavLink>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

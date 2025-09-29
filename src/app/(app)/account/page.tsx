@@ -37,7 +37,6 @@ const CATEGORIES: Expense["category"][] = [
   "rent",
   "salaries",
   "utilities",
-  "stock",
   "other",
 ];
 
@@ -58,9 +57,9 @@ const formatDate = (dateString: string): string => {
  * Formats a number to currency string.
  */
 const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-QA", {
     style: "currency",
-    currency: "USD",
+    currency: "QAR",
   }).format(amount);
 };
 
@@ -187,7 +186,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Amount ($)
+          Amount (QAR)
         </label>
         <input
           type="text"
@@ -572,20 +571,34 @@ export default function ExpensesPage() {
       </div>
 
       {/* Expenses List (Table for Desktop, Cards for Mobile) */}
-      <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-        Recent Expenses
-      </h2>
-      <input
-        type="text"
-        placeholder="Search by description..."
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setPage(1); // reset page on new search
-        }}
-        className="w-full md:w-64 px-3 py-2 mb-4 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-      />
-
+      <div className="flex justify-between align-center">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+          Recent Expenses
+        </h2>
+        <div className="mb-4 flex items-center space-x-2 relative w-full max-w-sm">
+          <input
+            type="text"
+            placeholder="Search by description..."
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1); // reset page on new search
+            }}
+            className="border p-2 w-full pr-10 rounded-lg" // add pr-10 to make space for icon
+          />
+          {query && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setPage(1); // reset page on clear
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
       {loading && expenses.length === 0 && (
         <div className="text-center p-10 text-gray-500 flex justify-center items-center">
           <Loader className="w-6 h-6 mr-2 animate-spin" /> Loading Expenses...

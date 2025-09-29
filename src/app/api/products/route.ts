@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
-    const { type, name, category, price, stock, imei } = data;
+    const { type, name, category, price, stock, imei, partnerId } = data;
     const newProductId = randomUUID();
     const createdAt = new Date().toISOString();
 
@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
       !name ||
       !category ||
       price === undefined ||
-      stock === undefined
+      stock === undefined ||
+      !partnerId
     ) {
       return NextResponse.json(
         { message: "Missing required fields for product creation." },
@@ -83,10 +84,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const imeiValue = type === "individual" && imei ? imei : null;
+    const imeiValue = imei;
 
     const stmt = db.prepare(
-      "INSERT INTO products (id, type, name, category, price, stock, imei, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO products (id, type, name, category, price, stock, imei, partner_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
 
     stmt.run(
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
       price,
       stock,
       imeiValue,
+      partnerId,
       createdAt
     );
 
@@ -135,14 +137,15 @@ export async function PUT(request: NextRequest) {
 
   try {
     const data = await request.json();
-    const { type, name, category, price, stock, imei } = data;
+    const { type, name, category, price, stock, imei, partnerId } = data;
 
     if (
       !type ||
       !name ||
       !category ||
       price === undefined ||
-      stock === undefined
+      stock === undefined ||
+      !partnerId
     ) {
       return NextResponse.json(
         { message: "Missing required fields for product update." },
@@ -150,10 +153,10 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const imeiValue = type === "individual" && imei ? imei : null;
+    const imeiValue = imei;
 
     const stmt = db.prepare(
-      "UPDATE products SET type = ?, name = ?, category = ?, price = ?, stock = ?, imei = ? WHERE id = ?"
+      "UPDATE products SET type = ?, name = ?, category = ?, price = ?, stock = ?, imei = ?, partner_id = ? WHERE id = ?"
     );
     const result = stmt.run(
       type,
@@ -162,6 +165,7 @@ export async function PUT(request: NextRequest) {
       price,
       stock,
       imeiValue,
+      partnerId,
       productId
     );
 
@@ -173,7 +177,7 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: "Product updated successfully." },
+      { id: productId, message: "Product updated successfully." },
       { status: 200 }
     );
   } catch (error) {

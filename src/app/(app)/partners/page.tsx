@@ -130,7 +130,7 @@ const PartnerForm: React.FC<PartnerFormProps> = ({
     <form onSubmit={handleSave} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Partner Type
+          Vendor Type
         </label>
         <select
           value={formData.type}
@@ -214,7 +214,7 @@ const PartnerForm: React.FC<PartnerFormProps> = ({
           disabled={loading}
         >
           {loading && <Loader className="w-4 h-4 mr-2 animate-spin" />}
-          {currentPartner ? "Update Partner" : "Add Partner"}
+          {currentPartner ? "Update Vendor" : "Add Vendor"}
         </button>
       </div>
     </form>
@@ -247,7 +247,7 @@ const Modal: React.FC<ModalProps> = ({
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
       >
         <h2 className="text-2xl font-bold text-gray-800 mb-6">
-          {currentPartner ? "Edit Partner" : "Add New Partner"}
+          {currentPartner ? "Edit Vendor" : "Add New Vendor"}
         </h2>
         <button
           onClick={closeModal}
@@ -299,7 +299,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
 
         <p className="text-gray-700 mb-6">
           Are you sure you want to permanently soft-delete **{partnerName}**?
-          This partner will no longer appear in active lists.
+          This vendor will no longer appear in active lists.
         </p>
 
         <div className="flex justify-end space-x-3">
@@ -385,7 +385,7 @@ export default function PartnersPage() {
         setPartners(result.partners);
         setTotalPartners(result.total);
       } else {
-        setError(result.message || "Failed to fetch partners.");
+        setError(result.message || "Failed to fetch vendors.");
       }
     } catch (err) {
       console.error("Fetch error:", err);
@@ -445,12 +445,12 @@ export default function PartnersPage() {
       const result = await response.json();
 
       if (response.ok) {
-        setMessage(`Partner ${isEditing ? "updated" : "added"} successfully!`);
+        setMessage(`Vendor ${isEditing ? "updated" : "added"} successfully!`);
         closeModal();
         fetchPartners(); // Refresh the list
       } else {
         setError(
-          result.message || `Failed to ${isEditing ? "update" : "add"} partner.`
+          result.message || `Failed to ${isEditing ? "update" : "add"} vendor.`
         );
       }
     } catch (err) {
@@ -489,10 +489,10 @@ export default function PartnersPage() {
       const result = await response.json();
 
       if (response.ok) {
-        setMessage("Partner soft-deleted successfully.");
+        setMessage("Vendor soft-deleted successfully.");
         fetchPartners();
       } else {
-        setError(result.message || "Failed to delete partner.");
+        setError(result.message || "Failed to delete vendor.");
       }
     } catch (err) {
       console.error("Delete error:", err);
@@ -506,7 +506,7 @@ export default function PartnersPage() {
     <div className="min-h-screen p-4 sm:p-8 font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b border-gray-200 mb-6">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-3 sm:mb-0">
-          Partner Management
+          Vendor Management
         </h1>
         <div className="flex space-x-3">
           <button
@@ -526,7 +526,7 @@ export default function PartnersPage() {
             className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 transition duration-150"
           >
             <Plus className="w-4 h-4 mr-2" />
-            New Partner
+            New Vendor
           </button>
         </div>
       </header>
@@ -546,19 +546,35 @@ export default function PartnersPage() {
       {/* Partners List (Table for Desktop, Cards for Mobile) */}
       <div className="flex flex-row justify-between items-center mb-3">
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-          Active Partners
+          Active Vendors
         </h2>
-        <input
-          type="text"
-          placeholder="Search by name..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <div className="mb-4 flex items-center space-x-2 relative w-full max-w-sm">
+          <input
+            type="text"
+            placeholder="Search by description..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1); // reset page on new search
+            }}
+            className="border p-2 w-full pr-10 rounded-lg" // add pr-10 to make space for icon
+          />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setPage(1); // reset page on clear
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       {loading && partners.length === 0 && (
         <div className="text-center p-10 text-gray-500 flex justify-center items-center">
-          <Loader className="w-6 h-6 mr-2 animate-spin" /> Loading Partners...
+          <Loader className="w-6 h-6 mr-2 animate-spin" /> Loading Vendors...
         </div>
       )}
 
@@ -571,7 +587,7 @@ export default function PartnersPage() {
                 Type
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name / Contact
+                Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Shop Name
@@ -628,14 +644,14 @@ export default function PartnersPage() {
                     <button
                       onClick={() => openEdit(partner)}
                       className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-100 transition"
-                      title="Edit Partner"
+                      title="Edit Vendor"
                     >
                       <Edit2 className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => handleDeleteClick(partner)}
                       className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-100 transition"
-                      title="Delete Partner"
+                      title="Delete Vendor"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
@@ -645,7 +661,7 @@ export default function PartnersPage() {
             ) : (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                  No active partners found. Add a new partner to get started!
+                  No active vendors found. Add a new vendor to get started!
                 </td>
               </tr>
             )}
@@ -706,7 +722,7 @@ export default function PartnersPage() {
           ))
         ) : (
           <div className="p-8 text-center text-gray-500 bg-white rounded-xl shadow-md">
-            No active partners found.
+            No active vendors found.
           </div>
         )}
       </div>
@@ -753,7 +769,7 @@ export default function PartnersPage() {
         closeModal={closeDeleteModal}
         handleConfirm={executeDelete}
         loading={loading}
-        partnerName={partnerToDelete?.name || "this partner"}
+        partnerName={partnerToDelete?.name || "this vendor"}
       />
     </div>
   );

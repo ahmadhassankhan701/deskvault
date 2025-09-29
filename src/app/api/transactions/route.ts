@@ -83,6 +83,8 @@ export async function POST(request: NextRequest) {
       totalAmount,
       date,
       party,
+      partyPhone,
+      partyShop,
       partnerId,
     } = data;
     const newTransactionId = randomUUID();
@@ -111,8 +113,8 @@ export async function POST(request: NextRequest) {
         : sanitizedPartnerId;
     const stmt = db.prepare(
       `INSERT INTO transactions (
-            id, product_id, type, quantity, price, total_amount, date, snapshot_partner_name, partner_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            id, product_id, type, quantity, price, total_amount, date, snapshot_partner_name, snapshot_partner_phone, snapshot_partner_shop, partner_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     stmt.run(
@@ -124,6 +126,8 @@ export async function POST(request: NextRequest) {
       totalAmount, // 6. total_amount
       date, // 7. date
       party, // 8. The value (party name) is inserted into the 'snapshot_partner_name' column
+      partyPhone || null, // 9. The value (party phone) is inserted into the 'snapshot_partner_phone' column
+      partyShop || null, // 10. The value (party shop) is inserted into the 'snapshot_partner_shop' column
       partnerIdForDB
     );
 
@@ -135,6 +139,83 @@ export async function POST(request: NextRequest) {
     console.error("POST Transaction API error:", error);
     return NextResponse.json(
       { message: "Internal Server Error during transaction recording." },
+      { status: 500 }
+    );
+  }
+}
+// --- PUT /api/transactions (Update) ---
+export async function PUT(request: NextRequest) {
+  try {
+    const data = await request.json();
+    const {
+      productId,
+      type,
+      quantity,
+      price,
+      totalAmount,
+      date,
+      party,
+      partyPhone,
+      partyShop,
+      partnerId,
+    } = data;
+
+    if (!productId) {
+      return NextResponse.json(
+        { message: "Product ID is required for transaction update." },
+        { status: 400 }
+      );
+    }
+
+    // Sanitize partnerId
+    const sanitizedPartnerId = partnerId ? partnerId.trim() : "";
+    const partnerIdForDB =
+      !sanitizedPartnerId || sanitizedPartnerId === "CUSTOMER"
+        ? null
+        : sanitizedPartnerId;
+
+    const stmt = db.prepare(
+      `UPDATE transactions
+       SET type = ?, 
+           quantity = ?, 
+           price = ?, 
+           total_amount = ?, 
+           date = ?, 
+           snapshot_partner_name = ?, 
+           snapshot_partner_phone = ?, 
+           snapshot_partner_shop = ?, 
+           partner_id = ?
+       WHERE product_id = ?`
+    );
+
+    const result = stmt.run(
+      type,
+      quantity,
+      price,
+      totalAmount,
+      date,
+      party,
+      partyPhone || null,
+      partyShop || null,
+      partnerIdForDB,
+      productId
+    );
+
+    if (result.changes === 0) {
+      return NextResponse.json(
+        { message: "No transaction found for the given productId." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      { message: "Transaction updated successfully." },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("PUT Transaction DB error:", error);
+    return NextResponse.json(
+      { message: "Error updating transaction." },
       { status: 500 }
     );
   }
