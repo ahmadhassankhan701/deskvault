@@ -29,10 +29,16 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (q) {
-      // Search differently depending on product type
-      whereClause += ` AND (imei LIKE ? OR snapshot_partner_name LIKE ? OR type LIKE ?)
-      )`;
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      // Corrected WHERE clause: remove the unnecessary closing parenthesis
+      // and ensure clear matching for IMEI
+      whereClause += ` AND (
+    imei LIKE ? 
+  )`;
+
+      // Use wildcards for broad searching
+      const searchTerm = `%${q}%`;
+
+      params.push(searchTerm);
     }
 
     const stmt = db.prepare(`

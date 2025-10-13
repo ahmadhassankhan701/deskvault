@@ -11,6 +11,7 @@ import {
   User,
   Store,
 } from "lucide-react";
+import debounce from "@/lib/debounce";
 
 // --- Type Definitions (Mirroring the API) ---
 
@@ -333,6 +334,7 @@ export default function PartnersPage() {
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [searchQueryText, setSearchQueryText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [totalPartners, setTotalPartners] = useState(0);
   // State for Delete Confirmation Modal
@@ -548,28 +550,83 @@ export default function PartnersPage() {
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">
           Active Vendors
         </h2>
-        <div className="mb-4 flex items-center space-x-2 relative w-full max-w-sm">
-          <input
-            type="text"
-            placeholder="Search by description..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(1); // reset page on new search
-            }}
-            className="border p-2 w-full pr-10 rounded-lg" // add pr-10 to make space for icon
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setPage(1); // reset page on clear
+        <div className="mb-4">
+          <div className="relative w-full max-w-sm">
+            <input
+              type="text"
+              placeholder={`Search by partner name...`}
+              value={searchQueryText}
+              // 🟢 CORRECT for Manual Typing: Uses the DEBOUNCED function
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const value = e.target.value;
+                setSearchQueryText(value);
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          )}
+              className="border p-2 w-full pr-16 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            {/* NEW: Joint Icon Button Container */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center p-1">
+              {/* 1. Clear Button (renders only if 'search' has a value) */}
+              {searchQueryText && (
+                <button
+                  onClick={() => {
+                    setSearchQueryText("");
+                    setSearchQuery("");
+                    setPage(1); // reset page on clear
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600"
+                  aria-label="Clear search"
+                >
+                  {/* 'X' Icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  // Since search is already triggered by onChange, this click handler
+                  // can be used to re-run the search, or simply ensure the page is reset.
+                  setSearchQuery(searchQueryText);
+                  setPage(1);
+                }}
+                // Use different color if it's the only visible icon (no search text)
+                className={`p-1 ${
+                  searchQueryText === ""
+                    ? "text-gray-400 hover:text-gray-600"
+                    : "text-blue-500 hover:text-blue-600"
+                }`}
+                aria-label="Search"
+              >
+                {/* Search Icon */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       {loading && partners.length === 0 && (

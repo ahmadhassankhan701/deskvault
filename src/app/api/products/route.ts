@@ -30,10 +30,9 @@ export async function GET(request: NextRequest) {
     if (q) {
       // Search differently depending on product type
       whereClause += ` AND (
-        (type = 'individual' AND imei LIKE ?) OR
-        (type = 'sku' AND name LIKE ?)
-      )`;
-      params.push(`%${q}%`, `%${q}%`);
+        imei LIKE ?)
+      `;
+      params.push(`%${q}%`);
     }
 
     const stmt = db.prepare(`
@@ -223,8 +222,8 @@ export async function DELETE(request: NextRequest) {
     // Optionally delete related transactions (cascading delete if foreign keys are set up, but safer to delete manually here)
 
     const deleteTransactionsStmt = db.prepare(
-  "DELETE FROM transactions WHERE product_id = ?"
-);
+      "DELETE FROM transactions WHERE product_id = ?"
+    );
     deleteTransactionsStmt.run(productId);
 
     return NextResponse.json(

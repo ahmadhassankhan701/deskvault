@@ -29,6 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@radix-ui/react-dropdown-menu";
+import debounce from "@/lib/debounce";
 
 // --- TYPE DEFINITIONS (Based on provided APIs and context) ---
 
@@ -1648,6 +1649,11 @@ export default function InventoryPage() {
       setTimeout(printLogic, 500);
     }
   };
+  // 1. Debounce for manual typing (prevents fetch on every key)
+  const debouncedSetSearch = useMemo(
+    () => debounce(setSearch, 300),
+    [setSearch] // Dependency is correct
+  );
   return (
     <div className="p-4 md:p-8 min-h-screen font-sans">
       {/* Header and Controls */}
@@ -1717,14 +1723,29 @@ export default function InventoryPage() {
           </button>
         ))}
       </div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-4">
         <div className="relative w-full max-w-sm">
           <input
             type="text"
-            placeholder={`Search by IMEI or Name`}
+            placeholder={`Search by IMEI or serial number...`}
             value={searchText}
-            onChange={(e) => {
-              setSearchText(e.target.value);
+            // 🟢 CORRECT for Manual Typing: Uses the DEBOUNCED function
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const value = e.target.value;
+              setSearchText(value);
+              // You MUST call debouncedSetSearch here, not setSearch
+              debouncedSetSearch(value);
+              setPage(1);
+            }}
+            // 🚀 CORRECT for Barcode Scanner: Uses the DIRECT function
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                // Call setSearch directly to bypass debounce and trigger immediate fetch
+                setSearch(searchText);
+                setPage(1);
+                (e.currentTarget as HTMLInputElement).blur();
+              }
             }}
             // INCREASED right padding (pr-16) to make room for BOTH icons
             className="border p-2 w-full pr-16 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1793,48 +1814,6 @@ export default function InventoryPage() {
             </button>
           </div>
         </div>
-        <button
-          // onClick={onClick}
-          className="flex items-center justify-center space-x-2
-                 p-3 rounded-lg bg-white border border-gray-300 text-gray-800 
-                 hover:bg-gray-50 hover:border-gray-400 transition duration-150 shadow-sm
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-          aria-label="Open Barcode Scanner"
-        >
-          {/* Icon: Barcode Scanner Icon */}
-          <svg
-            width="20px"
-            height="20px"
-            viewBox="0 0 512 512"
-            version="1.1"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <title>bar-code</title>
-            <g
-              id="Page-1"
-              stroke="none"
-              strokeWidth="1"
-              fill="none"
-              fillRule="evenodd"
-            >
-              <g
-                id="drop"
-                fill="#000000"
-                transform="translate(42.666667, 85.333333)"
-              >
-                <path
-                  d="M42.6666667,1.42108547e-14 L42.6666667,341.333333 L7.10542736e-15,341.333333 L7.10542736e-15,1.42108547e-14 L42.6666667,1.42108547e-14 Z M128,1.42108547e-14 L128,341.333333 L85.3333333,341.333333 L85.3333333,1.42108547e-14 L128,1.42108547e-14 Z M213.333333,1.42108547e-14 L213.333333,341.333333 L170.666667,341.333333 L170.666667,1.42108547e-14 L213.333333,1.42108547e-14 Z M426.666667,1.42108547e-14 L426.666667,341.333333 L384,341.333333 L384,1.42108547e-14 L426.666667,1.42108547e-14 Z M277.333333,1.42108547e-14 L277.333333,341.333333 L256,341.333333 L256,1.42108547e-14 L277.333333,1.42108547e-14 Z M341.333333,1.42108547e-14 L341.333333,341.333333 L320,341.333333 L320,1.42108547e-14 L341.333333,1.42108547e-14 Z"
-                  id="Combined-Shape"
-                ></path>
-              </g>
-            </g>
-          </svg>
-
-          {/* Text Label */}
-          <span className="text-sm font-semibold tracking-wide">
-            Scan Barcode
-          </span>
-        </button>
       </div>
       {/* Tab Content */}
       <div className="pb-8">
