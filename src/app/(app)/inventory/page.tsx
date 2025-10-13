@@ -145,6 +145,7 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   className?: string;
+  footer?: React.ReactNode;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -153,6 +154,7 @@ const Modal: React.FC<ModalProps> = ({
   title,
   onClose,
   className = "",
+  footer,
 }) =>
   isOpen ? (
     <div
@@ -160,19 +162,50 @@ const Modal: React.FC<ModalProps> = ({
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-xl shadow-2xl w-full max-w-xl p-6 relative max-h-[90vh] overflow-y-auto ${className}`}
+        // 1. CONTAINER: Use flex-col to stack children vertically.
+        // 2. Removed max-h-[90vh] and overflow-y-auto from here.
+        className={`bg-white rounded-xl shadow-2xl w-full max-w-xl relative flex flex-col max-h-[90vh] ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">
-          {title}
-        </h2>
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+        {/* -------------------- 1. FIXED HEADER -------------------- */}
+        <div className="p-6 pb-3 border-b border-gray-200 sticky top-0 bg-white z-10">
+          <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+            aria-label="Close modal"
+          >
+            {/* Assuming 'X' is a component/icon (e.g., from lucide-react or similar) */}
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+
+        {/* -------------------- 2. SCROLLABLE CONTENT -------------------- */}
+        <div
+          // 3. CONTENT: This takes up all available space and enables vertical scrolling.
+          className="p-6 py-4 overflow-y-auto flex-grow"
         >
-          <X className="w-6 h-6" />
-        </button>
-        {children}
+          {children}
+        </div>
+
+        {/* -------------------- 3. FIXED FOOTER -------------------- */}
+        {/* Ensure 'footer' is not just a button but the content you want fixed */}
+        <div className="p-6 pt-3 border-t border-gray-200 sticky bottom-0 bg-white z-10">
+          {footer}
+        </div>
       </div>
     </div>
   ) : null;
@@ -374,12 +407,14 @@ interface MovementsLogProps {
   transactions: Transaction[];
   products: Product[];
   loading: boolean;
+  openReceiptModal: (transaction: any, productName: string) => void;
 }
 
 const MovementsLog: React.FC<MovementsLogProps> = ({
   transactions,
   products,
   loading,
+  openReceiptModal,
 }) => {
   // Map product names to IDs for display
   const productMap = useMemo(() => {
@@ -427,18 +462,66 @@ const MovementsLog: React.FC<MovementsLogProps> = ({
                   </span>
                 </p>
                 <p className="text-sm text-gray-600">
-                  {t.party || t.partnerId} |{" "}
+                  {t.party || "Unknown"} |{" "}
                   {new Date(t.date).toLocaleDateString()}
                 </p>
               </div>
               <div className="text-right">
-                <span
-                  className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border ${getStatusStyle(
-                    t.type
-                  )}`}
-                >
-                  {t.type.toUpperCase().replace("-", " ")}
-                </span>
+                <div className="flex gap-2 items-center justify-end">
+                  <button
+                    onClick={() => openReceiptModal(t, productMap[t.productId])}
+                    // Added 'flex items-center' to the button for proper alignment of the icon and text
+                    className={`flex items-center space-x-1 p-1 text-blue-500 hover:text-blue-600 rounded-full border`}
+                    aria-label="View Receipt" // Updated ARIA label for clarity
+                  >
+                    {/* Receipt Icon */}
+                    <svg
+                      width="20px"
+                      height="20px"
+                      viewBox="0 0 24 24"
+                      id="receipt"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="icon multi-color"
+                    >
+                      {/* Corrected: Replaced <title style="..."> with a standard <title> tag and placed styles in the path or removed them */}
+                      <title>receipt</title>
+
+                      <path
+                        id="tertiary-fill"
+                        d="M17,13H3v5a3,3,0,0,0,3,3H17Z"
+                        // Corrected: Inline CSS style attributes are converted to JSX camelCase style objects
+                        style={{ fill: "#b7b7b7", strokeWidth: 2 }}
+                      ></path>
+
+                      <path
+                        id="secondary-fill"
+                        d="M21,17v1a3,3,0,0,1-3,3H6a3,3,0,0,0,3-3V17a1,1,0,0,1,1-1H20A1,1,0,0,1,21,17Z"
+                        // Corrected: Inline CSS style attributes are converted to JSX camelCase style objects
+                        style={{ fill: "rgb(44, 169, 188)", strokeWidth: 2 }}
+                      ></path>
+
+                      <path
+                        id="primary-stroke"
+                        d="M6,21H5.84A3.13,3.13,0,0,1,3,17.83V3L7,5l3-2,3,2,4-2V16m3,0H10a1,1,0,0,0-1,1v1a3,3,0,0,1-3,3H18a3,3,0,0,0,3-3V17A1,1,0,0,0,20,16ZM8,10h4"
+                        // Corrected: Inline CSS style attributes are converted to JSX camelCase style objects
+                        style={{
+                          fill: "none",
+                          stroke: "rgb(0, 0, 0)",
+                          strokeLinecap: "round", // Changed stroke-linecap to camelCase
+                          strokeLinejoin: "round", // Changed stroke-linejoin to camelCase
+                          strokeWidth: 2,
+                        }}
+                      ></path>
+                    </svg>
+                  </button>
+                  <span
+                    className={`inline-block px-2 py-1 text-xs font-medium rounded-full border ${getStatusStyle(
+                      t.type
+                    )}`}
+                  >
+                    {t.type.charAt(0).toUpperCase() + t.type.slice(1)}
+                  </span>
+                </div>
                 <p className="text-base font-bold mt-1">
                   {formatCurrency(t.totalAmount)}
                 </p>
@@ -460,6 +543,7 @@ export default function InventoryPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
@@ -470,6 +554,8 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<"active" | "movements">("active");
 
   // Product Modal State
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [productFormData, setProductFormData] = useState<ProductFormData>(
@@ -583,7 +669,17 @@ export default function InventoryPage() {
     setCurrentProduct(null);
     setProductFormData(initialProductFormData);
   };
+  const openReceiptModal = (transaction: any, productName: string) => {
+    console.log(productName);
+    const data = { ...transaction, productName: productName || "Unknown" };
+    setSelectedReceipt(data);
+    setIsReceiptModalOpen(true);
+  };
 
+  const closeReceiptModal = () => {
+    setIsReceiptModalOpen(false);
+    setSelectedReceipt(null);
+  };
   const handleDeleteClick = (product: Product) => {
     setProductToDeleteId(product.id);
     setIsConfirmDeleteModalOpen(true);
@@ -645,6 +741,7 @@ export default function InventoryPage() {
           type: "purchase",
           quantity: stockValue,
           price: priceValue,
+          imei: productFormData.imei,
           totalAmount: priceValue * stockValue,
           date: new Date().toISOString(),
           party: transactionFormData.partyName,
@@ -659,7 +756,9 @@ export default function InventoryPage() {
         });
         if (responseTr.ok) {
           setMessage(
-            `Product ${isEditing ? "updated" : "added"} successfully.`
+            `Product and transaction ${
+              isEditing ? "updated" : "added"
+            } successfully.`
           );
           closeProductModal();
           fetchData(); // Refresh data
@@ -729,9 +828,9 @@ export default function InventoryPage() {
     let defaultPartyName = "";
 
     // If transaction is related to a partner (lend-out, return, purchase), default to the first one available
-    if (type === "purchase" && partners.length > 0) {
+    if (partners.length > 0) {
       defaultPartnerId = partners[0].id;
-      defaultPartyName = partners[0].name;
+      defaultPartyName = type === "purchase" ? partners[0].name : "";
     }
 
     setTransactionFormData({
@@ -780,9 +879,7 @@ export default function InventoryPage() {
     setError("");
 
     const quantity = parseInt(transactionFormData.quantity.toString(), 10);
-    const productPrice = transactionProduct.price;
-    const isIncoming = transactionFormData.type === "purchase";
-    const isOutgoing = transactionFormData.type === "sale";
+    const productPrice = transactionFormData.price || transactionProduct.price; // Use form price or fallback to current product price
 
     if (isNaN(quantity) || quantity <= 0) {
       setError("Quantity must be a positive number.");
@@ -791,7 +888,7 @@ export default function InventoryPage() {
     }
 
     // Stock check for outgoing transactions
-    if (isOutgoing && quantity > transactionProduct.stock) {
+    if (quantity > transactionProduct.stock) {
       setError(
         `Cannot process: Only ${transactionProduct.stock} units are currently in stock.`
       );
@@ -801,19 +898,21 @@ export default function InventoryPage() {
 
     try {
       // 1. Calculate new stock and total amount
-      const stockChange = isIncoming ? quantity : -quantity;
-      const newStock = transactionProduct.stock + stockChange;
+      const newStock = transactionProduct.stock - quantity;
       const totalAmount = productPrice * quantity; // Total amount is calculated based on current price * quantity
 
       // 2. POST the Transaction
       const transactionPayload = {
         productId: transactionProduct.id,
-        type: transactionFormData.type,
+        type: "sale",
         quantity: quantity,
         price: productPrice,
+        imei: transactionProduct.imei,
         totalAmount: totalAmount,
-        date: transactionFormData.date,
-        party: transactionFormData.partyName,
+        date: new Date().toISOString(),
+        party: transactionFormData.partyName || "Unknown",
+        partyPhone: transactionFormData.partyPhone || "",
+        partyShop: transactionFormData.partyShop || null,
         partnerId: transactionFormData.partnerId || "CUSTOMER", // Use a placeholder if not a partner transaction
       };
 
@@ -839,6 +938,7 @@ export default function InventoryPage() {
         price: transactionProduct.price,
         stock: newStock,
         imei: transactionProduct.imei,
+        partnerId: transactionFormData.partnerId || null,
       };
 
       const productResponse = await fetch(
@@ -1131,8 +1231,6 @@ export default function InventoryPage() {
 
     const currentStock = transactionProduct.stock;
     const currentPrice = transactionProduct.price;
-    // Use price if set, otherwise 0 to prevent NaN
-    const calculatedTotal = currentPrice * (quantity || 0);
 
     const transactionTypes = [
       {
@@ -1446,12 +1544,18 @@ export default function InventoryPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <ActionDropdown
-                          product={product}
-                          openProductModal={openProductModal}
-                          openTransactionModal={openTransactionModal}
-                          handleDeleteClick={handleDeleteClick}
-                        />
+                        {product.stock === 0 ? (
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-semibold mr-2">
+                            Out of Stock
+                          </span>
+                        ) : (
+                          <ActionDropdown
+                            product={product}
+                            openProductModal={openProductModal}
+                            openTransactionModal={openTransactionModal}
+                            handleDeleteClick={handleDeleteClick}
+                          />
+                        )}
                       </td>
                     </tr>
                   );
@@ -1464,6 +1568,86 @@ export default function InventoryPage() {
     );
   };
 
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = () => {
+    if (!printRef.current) return;
+
+    const printContent = printRef.current.innerHTML;
+    const tailwindLink =
+      "https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css";
+
+    const printWindow = window.open("", "_blank", "width=1000,height=800");
+
+    if (printWindow) {
+      printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Transaction Receipt</title>
+                    <link rel="stylesheet" href="${tailwindLink}">
+                    <style>
+                        /* Print-specific styles to ensure proper spacing and scaling */
+                        @media print {
+                            body {
+                                padding: 0 !important;
+                                margin: 0 !important;
+                                background: white !important;
+                                display: block !important;
+                            }
+                            .receipt {
+                                width: 100% !important; 
+                                max-width: 100% !important; 
+                                margin: 0 !important; 
+                                box-shadow: none !important;
+                                border: none !important;
+                                border-radius: 0 !important;
+                                padding: 10px; /* Small paper edge clearance */
+                            }
+
+                            /* FIX: Re-establish vertical margin/spacing for block elements */
+                            .receipt h2, 
+                            .receipt p, 
+                            .receipt div:not(.flex) {
+                                /* Apply a small bottom margin to simulate Tailwind's space-y */
+                                margin-bottom: 0.5rem !important; 
+                            }
+                            
+                            /* Ensure large text elements like titles retain space */
+                            .receipt .text-2xl, 
+                            .receipt .text-xl {
+                                margin-bottom: 1rem !important;
+                            }
+
+                            /* Ensure border-t and border-b spacing is preserved */
+                            .receipt .border-t, 
+                            .receipt .border-b {
+                                padding-top: 0.5rem !important;
+                                padding-bottom: 0.5rem !important;
+                            }
+
+                            /* Optional: If space-y is still collapsing, you may need a more aggressive selector */
+                            .receipt > div > div {
+                                margin-top: 1rem !important;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="receipt">${printContent}</div>
+                </body>
+            </html>
+        `);
+
+      printWindow.document.close();
+      printWindow.focus();
+
+      const printLogic = () => {
+        printWindow.print();
+        printWindow.close();
+      };
+
+      setTimeout(printLogic, 500);
+    }
+  };
   return (
     <div className="p-4 md:p-8 min-h-screen font-sans">
       {/* Header and Controls */}
@@ -1533,32 +1717,124 @@ export default function InventoryPage() {
           </button>
         ))}
       </div>
-      <div className="mb-4 flex items-center space-x-2 relative w-full max-w-sm">
-        <input
-          type="text"
-          placeholder={
-            activeTab === "active"
-              ? `Search by IMEI or Name`
-              : `Search by Name or Type`
-          }
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1); // reset page on new search
-          }}
-          className="border p-2 w-full pr-10 rounded-lg" // add pr-10 to make space for icon
-        />
-        {search && (
-          <button
-            onClick={() => {
-              setSearch("");
-              setPage(1); // reset page on clear
+      <div className="flex justify-between items-center mb-4">
+        <div className="relative w-full max-w-sm">
+          <input
+            type="text"
+            placeholder={`Search by IMEI or Name`}
+            value={searchText}
+            onChange={(e) => {
+              setSearchText(e.target.value);
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            // INCREASED right padding (pr-16) to make room for BOTH icons
+            className="border p-2 w-full pr-16 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {/* NEW: Joint Icon Button Container */}
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center p-1">
+            {/* 1. Clear Button (renders only if 'search' has a value) */}
+            {searchText && (
+              <button
+                onClick={() => {
+                  setSearchText("");
+                  setSearch("");
+                  setPage(1); // reset page on clear
+                }}
+                className="p-1 text-gray-400 hover:text-gray-600"
+                aria-label="Clear search"
+              >
+                {/* 'X' Icon */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                // Since search is already triggered by onChange, this click handler
+                // can be used to re-run the search, or simply ensure the page is reset.
+                setSearch(searchText);
+                setPage(1);
+              }}
+              // Use different color if it's the only visible icon (no search text)
+              className={`p-1 ${
+                search
+                  ? "text-gray-400 hover:text-gray-600"
+                  : "text-blue-500 hover:text-blue-600"
+              }`}
+              aria-label="Search"
+            >
+              {/* Search Icon */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <button
+          // onClick={onClick}
+          className="flex items-center justify-center space-x-2
+                 p-3 rounded-lg bg-white border border-gray-300 text-gray-800 
+                 hover:bg-gray-50 hover:border-gray-400 transition duration-150 shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+          aria-label="Open Barcode Scanner"
+        >
+          {/* Icon: Barcode Scanner Icon */}
+          <svg
+            width="20px"
+            height="20px"
+            viewBox="0 0 512 512"
+            version="1.1"
+            xmlns="http://www.w3.org/2000/svg"
           >
-            ✕
-          </button>
-        )}
+            <title>bar-code</title>
+            <g
+              id="Page-1"
+              stroke="none"
+              strokeWidth="1"
+              fill="none"
+              fillRule="evenodd"
+            >
+              <g
+                id="drop"
+                fill="#000000"
+                transform="translate(42.666667, 85.333333)"
+              >
+                <path
+                  d="M42.6666667,1.42108547e-14 L42.6666667,341.333333 L7.10542736e-15,341.333333 L7.10542736e-15,1.42108547e-14 L42.6666667,1.42108547e-14 Z M128,1.42108547e-14 L128,341.333333 L85.3333333,341.333333 L85.3333333,1.42108547e-14 L128,1.42108547e-14 Z M213.333333,1.42108547e-14 L213.333333,341.333333 L170.666667,341.333333 L170.666667,1.42108547e-14 L213.333333,1.42108547e-14 Z M426.666667,1.42108547e-14 L426.666667,341.333333 L384,341.333333 L384,1.42108547e-14 L426.666667,1.42108547e-14 Z M277.333333,1.42108547e-14 L277.333333,341.333333 L256,341.333333 L256,1.42108547e-14 L277.333333,1.42108547e-14 Z M341.333333,1.42108547e-14 L341.333333,341.333333 L320,341.333333 L320,1.42108547e-14 L341.333333,1.42108547e-14 Z"
+                  id="Combined-Shape"
+                ></path>
+              </g>
+            </g>
+          </svg>
+
+          {/* Text Label */}
+          <span className="text-sm font-semibold tracking-wide">
+            Scan Barcode
+          </span>
+        </button>
       </div>
       {/* Tab Content */}
       <div className="pb-8">
@@ -1568,6 +1844,7 @@ export default function InventoryPage() {
             products={products}
             transactions={transactions}
             loading={loading}
+            openReceiptModal={openReceiptModal}
           />
         )}
       </div>
@@ -1634,6 +1911,123 @@ export default function InventoryPage() {
           .replace("-", " ")}`}
       >
         {renderTransactionForm()}
+      </Modal>
+      <Modal
+        isOpen={isReceiptModalOpen}
+        onClose={closeReceiptModal}
+        title="Transaction Receipt"
+        footer={
+          <div className="flex-none border-t border-gray-100 bg-white p-4 sticky bottom-0 z-10 print-button-container">
+            <button
+              onClick={handlePrint}
+              className="w-full py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700"
+            >
+              Print Receipt
+            </button>
+          </div>
+        }
+      >
+        {selectedReceipt ? (
+          <div
+            id="receipt"
+            className="flex flex-col h-[600px] w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+          >
+            {/* Scrollable Content */}
+            <div ref={printRef} className="flex-1 p-6 space-y-6">
+              {/* Header */}
+              <div className="flex justify-between items-start">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Payment Receipt
+                </h2>
+              </div>
+
+              {/* Company & Job Info */}
+              <div className="flex justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">
+                    {selectedReceipt.type === "sale" ? "Customer" : "Vendor"}
+                  </p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <div className="w-6 h-6 rounded-lg bg-gray-200 flex items-center justify-center font-bold text-xs">
+                      {selectedReceipt.party.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-gray-800 font-medium">
+                      {selectedReceipt.party}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Date</p>
+                  <p className="text-gray-800 font-medium">
+                    {new Date(selectedReceipt.date).getDate() +
+                      "-" +
+                      (new Date(selectedReceipt.date).getMonth() + 1) +
+                      "-" +
+                      new Date(selectedReceipt.date).getFullYear() +
+                      " " +
+                      new Date(selectedReceipt.date).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="flex space-x-2">
+                {selectedReceipt.type === "sale" ? (
+                  <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-600 font-medium">
+                    sale
+                  </span>
+                ) : (
+                  <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-600 font-medium">
+                    purchase
+                  </span>
+                )}
+              </div>
+
+              {/* Task Section */}
+              <div className="border border-gray-100 rounded-xl p-4">
+                <div className="flex justify-between mb-2">
+                  <div>
+                    <p className="font-medium text-gray-800">
+                      {selectedReceipt.quantity +
+                        " x " +
+                        selectedReceipt.productName}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {"serial: " + selectedReceipt.imei}
+                    </p>
+                  </div>
+                  <span className="font-semibold text-gray-700">
+                    {selectedReceipt.price} QAR
+                  </span>
+                </div>
+                <div className="border-t mt-3 pt-2 flex justify-between text-green-700 font-semibold">
+                  <span>Total</span>
+                  <span>{selectedReceipt.price} QAR</span>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Balance</span>
+                  <span className="font-medium">0 QAR</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Discount</span>
+                  <span className="font-medium text-red-500">0 QAR</span>
+                </div>
+                <div className="border-t mt-2 pt-2 flex justify-between items-center">
+                  <span className="text-gray-500 text-sm">Grand Total</span>
+                  <span className="text-2xl font-bold text-green-600">
+                    {selectedReceipt.price} QAR
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p>No data available.</p>
+        )}
       </Modal>
 
       <ConfirmDeleteModal

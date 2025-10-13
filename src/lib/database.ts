@@ -64,6 +64,7 @@ function initializeDatabase() {
         type TEXT NOT NULL CHECK(type IN ('purchase', 'sale')),
         quantity INTEGER NOT NULL,
         price REAL NOT NULL,
+        imei TEXT NOT NULL,
         total_amount REAL NOT NULL,
         date DATETIME NOT NULL,
         partner_id TEXT,

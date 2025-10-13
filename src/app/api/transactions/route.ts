@@ -9,6 +9,7 @@ interface Transaction {
   type: "purchase" | "sale" | "lend-out" | "return";
   quantity: number;
   price: number;
+  imei?: string | null; // CamelCase for TypeScript
   totalAmount: number; // CamelCase for TypeScript
   date: string;
   party: string;
@@ -28,8 +29,10 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (q) {
-      whereClause += " AND (snapshot_partner_name LIKE ? OR type LIKE ?)";
-      params.push(`%${q}%`, `%${q}%`);
+      // Search differently depending on product type
+      whereClause += ` AND (imei LIKE ? OR snapshot_partner_name LIKE ? OR type LIKE ?)
+      )`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     const stmt = db.prepare(`
@@ -39,6 +42,7 @@ export async function GET(request: NextRequest) {
         type, 
         quantity, 
         price, 
+        imei,
         total_amount AS totalAmount,
         date, 
         snapshot_partner_name AS party, 
@@ -80,6 +84,7 @@ export async function POST(request: NextRequest) {
       type,
       quantity,
       price,
+      imei,
       totalAmount,
       date,
       party,
@@ -95,6 +100,7 @@ export async function POST(request: NextRequest) {
       quantity === undefined ||
       price === undefined ||
       totalAmount === undefined ||
+      imei === undefined ||
       !date
     ) {
       return NextResponse.json(
@@ -113,8 +119,8 @@ export async function POST(request: NextRequest) {
         : sanitizedPartnerId;
     const stmt = db.prepare(
       `INSERT INTO transactions (
-            id, product_id, type, quantity, price, total_amount, date, snapshot_partner_name, snapshot_partner_phone, snapshot_partner_shop, partner_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            id, product_id, type, quantity, price,imei, total_amount, date, snapshot_partner_name, snapshot_partner_phone, snapshot_partner_shop, partner_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     stmt.run(
@@ -123,6 +129,7 @@ export async function POST(request: NextRequest) {
       type, // 3. type
       quantity, // 4. quantity
       price, // 5. price
+      imei, // 6. imei
       totalAmount, // 6. total_amount
       date, // 7. date
       party, // 8. The value (party name) is inserted into the 'snapshot_partner_name' column
@@ -153,6 +160,7 @@ export async function PUT(request: NextRequest) {
       quantity,
       price,
       totalAmount,
+      imei,
       date,
       party,
       partyPhone,
@@ -179,6 +187,7 @@ export async function PUT(request: NextRequest) {
        SET type = ?, 
            quantity = ?, 
            price = ?, 
+            imei = ?,
            total_amount = ?, 
            date = ?, 
            snapshot_partner_name = ?, 
@@ -192,6 +201,7 @@ export async function PUT(request: NextRequest) {
       type,
       quantity,
       price,
+      imei,
       totalAmount,
       date,
       party,

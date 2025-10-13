@@ -33,39 +33,31 @@ const ReportsPage = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [activeTab, setActiveTab] = useState<"week" | "month" | "all">("week");
 
-  // ✅ Date parsing helper
-  const parseDate = (dateStr: string) => {
-    return new Date(dateStr.replace(" ", "T"));
-  };
+  const parseDate = (dateStr: string) => new Date(dateStr.replace(" ", "T"));
 
-  // ✅ Load transactions (sales only)
+  // ✅ Fetch all transactions (we’ll filter both sales & purchases)
   useEffect(() => {
     const fetchTransactions = async () => {
       const res = await fetch("/api/transactions");
       const json = await res.json();
-      setTransactions(
-        (json.transactions || []).filter((t: Transaction) => t.type === "sale")
-      );
+      setTransactions(json.transactions || []);
     };
     fetchTransactions();
   }, []);
 
-  // ✅ Load expenses
+  // ✅ Fetch expenses
   useEffect(() => {
     const fetchExpenses = async () => {
-      // After fetching from /api/expenses
-      const result = await fetch("/api/expenses");
-      const json = await result.json();
-
+      const res = await fetch("/api/expenses");
+      const json = await res.json();
       if (json.success) {
-        const expensesArray = json.data.expenses; // <-- extract the array
-        setExpenses(expensesArray || []);
+        setExpenses(json.data.expenses || []);
       }
     };
     fetchExpenses();
   }, []);
 
-  // ✅ Filter data based on tab
+  // ✅ Filter by active tab
   const filterByTab = <T extends { date: string }>(data: T[]) => {
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -80,17 +72,28 @@ const ReportsPage = () => {
     return data;
   };
 
-  const filteredSales = filterByTab(transactions);
+  // ✅ Separate filtered sales and purchases
+  const filteredSales = filterByTab(
+    transactions.filter((t) => t.type === "sale")
+  );
+  const filteredPurchases = filterByTab(
+    transactions.filter((t) => t.type === "purchase")
+  );
   const filteredExpenses = filterByTab(expenses);
 
   // ✅ Totals
   const totalSales = filteredSales.reduce((sum, t) => sum + t.totalAmount, 0);
+  const totalPurchases = filteredPurchases.reduce(
+    (sum, t) => sum + t.totalAmount,
+    0
+  );
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalProfit = totalSales - totalExpenses;
+  const totalProfit = totalSales - (totalExpenses + totalPurchases);
 
-  // ✅ Chart data
+  // ✅ Chart data (updated)
   const chartData = [
     { name: "Sales", amount: totalSales },
+    { name: "Purchases", amount: totalPurchases },
     { name: "Expenses", amount: totalExpenses },
   ];
 
@@ -108,12 +111,21 @@ const ReportsPage = () => {
       </Tabs>
 
       {/* Totals */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <h2 className="text-lg font-semibold">Total Sales</h2>
             <p className="text-xl font-bold text-green-600">
               {totalSales.toFixed(2)} QAR
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <h2 className="text-lg font-semibold">Total Purchases</h2>
+            <p className="text-xl font-bold text-blue-600">
+              {totalPurchases.toFixed(2)} QAR
             </p>
           </CardContent>
         </Card>
@@ -144,7 +156,9 @@ const ReportsPage = () => {
       {/* Chart */}
       <Card>
         <CardContent className="p-4">
-          <h2 className="text-lg font-semibold mb-4">Sales vs Expenses</h2>
+          <h2 className="text-lg font-semibold mb-4">
+            Sales, Purchases & Expenses
+          </h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />

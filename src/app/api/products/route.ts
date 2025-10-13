@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     // Only active products: stock > 0
-    let whereClause = "WHERE stock > 0";
+    let whereClause = "WHERE stock > -1"; // Adjusted to include zero stock
     const params: any[] = [];
 
     if (q) {
@@ -221,9 +221,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Optionally delete related transactions (cascading delete if foreign keys are set up, but safer to delete manually here)
+
     const deleteTransactionsStmt = db.prepare(
-      "DELETE FROM transactions WHERE product_id = ?"
-    );
+  "DELETE FROM transactions WHERE product_id = ?"
+);
     deleteTransactionsStmt.run(productId);
 
     return NextResponse.json(
